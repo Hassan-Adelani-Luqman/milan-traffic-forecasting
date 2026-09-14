@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -41,7 +42,7 @@ from typing import Any
 import numpy as np
 import psutil
 
-from src.config import Config, load_config
+from src.config import PROJECT_ROOT, Config, load_config
 from src.memory_profiling import format_bytes
 from src.timing import describe_environment
 
@@ -170,6 +171,27 @@ def _run_worker(strategy: str, path: Path, config: Config) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
+def _worker_environment() -> dict[str, str]:
+    """Environment for a worker, with the repository on ``PYTHONPATH``.
+
+    The caller's working directory is not the repository root in every
+    environment that matters. A Kaggle notebook runs from ``/kaggle/working``
+    while the clone lives in ``/kaggle/working/repo``, so a worker launched with
+    the caller's cwd fails with ``No module named 'src'``. The parent's
+    ``sys.path`` does not help either: it is not inherited by a subprocess.
+
+    Anchoring on :data:`src.config.PROJECT_ROOT` -- which is derived from this
+    package's own location rather than from cwd -- makes the worker find ``src``
+    wherever it was launched from.
+    """
+    env = dict(os.environ)
+    existing = env.get("PYTHONPATH", "")
+    root = str(PROJECT_ROOT)
+    parts = [root, *(p for p in existing.split(os.pathsep) if p and p != root)]
+    env["PYTHONPATH"] = os.pathsep.join(parts)
+    return env
+
+
 def _measure_isolated(strategy: str, path: Path, config_path: str | None) -> dict[str, Any]:
     """Run one measurement in a fresh interpreter and parse its result.
 
@@ -185,13 +207,18 @@ def _measure_isolated(strategy: str, path: Path, config_path: str | None) -> dic
         "--strategy",
         strategy,
         "--path",
-        str(path),
+        str(Path(path).resolve()),
     ]
     if config_path:
-        cmd += ["--config", config_path]
+        cmd += ["--config", str(Path(config_path).resolve())]
 
     completed = subprocess.run(
-        cmd, capture_output=True, text=True, cwd=str(Path.cwd()), check=False
+        cmd,
+        capture_output=True,
+        text=True,
+        cwd=str(PROJECT_ROOT),
+        env=_worker_environment(),
+        check=False,
     )
     if completed.returncode != 0:
         raise RuntimeError(

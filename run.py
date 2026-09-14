@@ -15,9 +15,16 @@ The Makefile mirrors these targets for anyone who prefers ``make``.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
+
+# Anchored on this file rather than on the caller's working directory, so
+# `python /path/to/run.py <task>` works from anywhere. A subprocess does not
+# inherit the parent's sys.path, only PYTHONPATH.
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 # Ordered so `all` runs the pipeline end to end.
 PIPELINE = ("env", "download", "ingest", "matrix", "eda", "train", "evaluate", "report")
@@ -58,8 +65,12 @@ _BY_NAME = {t.name: t for t in TASKS}
 def _run(module: str, args: list[str]) -> int:
     """Invoke a module with the current interpreter, returning its exit code."""
     cmd = [sys.executable, "-m", module, *args]
+    env = dict(os.environ)
+    root = str(PROJECT_ROOT)
+    existing = [p for p in env.get("PYTHONPATH", "").split(os.pathsep) if p and p != root]
+    env["PYTHONPATH"] = os.pathsep.join([root, *existing])
     print(f"$ {' '.join(cmd)}", flush=True)
-    return subprocess.call(cmd)
+    return subprocess.call(cmd, cwd=root, env=env)
 
 
 def _task_args(task: Task, config: str | None, passthrough: list[str]) -> list[str]:
