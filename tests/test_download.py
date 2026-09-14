@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -25,6 +26,7 @@ from src.download import (
     GuestbookResponse,
     download_file,
     ensure_disk_space,
+    load_dotenv,
     verify_md5,
     write_manifest,
 )
@@ -134,6 +136,46 @@ def test_cli_flag_overrides_environment(monkeypatch) -> None:
         gb_name="Flag Name", gb_email=None, gb_institution=None, gb_position=None
     )
     assert GuestbookResponse.from_args_or_env(args).name == "Flag Name"
+
+
+# --------------------------------------------------------------------------
+# .env loading
+# --------------------------------------------------------------------------
+
+
+def test_dotenv_sets_unset_variables(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("DATAVERSE_GB_NAME", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(["# a comment", "", "DATAVERSE_GB_NAME=From File"]), encoding="utf-8"
+    )
+
+    assert load_dotenv(env_file) == {"DATAVERSE_GB_NAME": "From File"}
+    assert os.environ["DATAVERSE_GB_NAME"] == "From File"
+
+
+def test_real_environment_wins_over_dotenv(tmp_path, monkeypatch) -> None:
+    """Kaggle Secrets must override the checked-out file, not the reverse."""
+    monkeypatch.setenv("DATAVERSE_GB_NAME", "From Environment")
+    env_file = tmp_path / ".env"
+    env_file.write_text("DATAVERSE_GB_NAME=From File", encoding="utf-8")
+
+    assert load_dotenv(env_file) == {}
+    assert os.environ["DATAVERSE_GB_NAME"] == "From Environment"
+
+
+def test_dotenv_strips_quotes_and_ignores_junk(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("DATAVERSE_GB_INSTITUTION", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(["no_equals_sign_here", 'DATAVERSE_GB_INSTITUTION="Some University"']),
+        encoding="utf-8",
+    )
+    assert load_dotenv(env_file)["DATAVERSE_GB_INSTITUTION"] == "Some University"
+
+
+def test_dotenv_absent_is_not_an_error(tmp_path) -> None:
+    assert load_dotenv(tmp_path / "nope.env") == {}
 
 
 # --------------------------------------------------------------------------

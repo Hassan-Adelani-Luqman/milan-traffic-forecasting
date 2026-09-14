@@ -32,3 +32,6 @@ results/checkpoints/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local secrets: Dataverse guestbook identity (DATAVERSE_GB_*)
+.env

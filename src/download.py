@@ -39,7 +39,7 @@ from typing import Any
 
 import requests
 
-from src.config import Config, load_config
+from src.config import PROJECT_ROOT, Config, load_config
 
 __all__ = [
     "DataverseFile",
@@ -47,6 +47,7 @@ __all__ = [
     "DataverseClient",
     "download_file",
     "verify_md5",
+    "load_dotenv",
 ]
 
 # Read in 8 MiB chunks: large enough that per-chunk overhead is negligible on a
@@ -124,6 +125,38 @@ class DataverseFile:
             content_type=str(data_file.get("contentType", "")),
             restricted=bool(entry.get("restricted", False)),
         )
+
+
+def load_dotenv(path: Path | None = None) -> dict[str, str]:
+    """Load ``KEY=value`` pairs from a local ``.env`` into the environment.
+
+    Guestbook identity is personal data, so it belongs in a gitignored file
+    rather than in the repository, a shell history or a committed config.
+    Variables already present in the environment win, which lets Kaggle Secrets
+    or a CI secret store override the file without editing it.
+
+    Args:
+        path: The file to read. Defaults to ``.env`` beside the project root.
+
+    Returns:
+        The keys that were actually set from the file.
+    """
+    env_path = path or (PROJECT_ROOT / ".env")
+    applied: dict[str, str] = {}
+    if not env_path.exists():
+        return applied
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip("'\"")
+        if key and key not in os.environ:
+            os.environ[key] = value
+            applied[key] = value
+    return applied
 
 
 @dataclass(frozen=True)
@@ -679,6 +712,7 @@ def main(argv: list[str] | None = None) -> int:
         print("\n(dry run: nothing downloaded)")
         return 0
 
+    load_dotenv()
     guestbook = GuestbookResponse.from_args_or_env(args)
     outstanding = sum(
         f.filesize
