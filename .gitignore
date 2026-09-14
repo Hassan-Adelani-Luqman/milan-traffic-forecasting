@@ -1,0 +1,34 @@
+# ---- Data -------------------------------------------------------------
+# Raw CDR text files (~20 GB) and per-day interim parquet are never committed.
+data/raw/
+data/interim/
+# Processed artefacts are large, EXCEPT the extracted series which are the
+# reproducibility path for anyone without the 20 GB download.
+data/processed/*
+!data/processed/.gitkeep
+!data/processed/selected_series.parquet
+
+# ---- Python -----------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ---- Results ----------------------------------------------------------
+# Figures, tables and predictions are regenerated; experiments.csv and
+# environment.json ARE committed as the experimentation audit trail.
+results/figures/*
+!results/figures/.gitkeep
+results/predictions/*
+!results/predictions/.gitkeep
+results/checkpoints/
+
+# ---- OS / editor ------------------------------------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
