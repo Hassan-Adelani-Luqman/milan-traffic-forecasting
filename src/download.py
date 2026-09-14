@@ -681,12 +681,21 @@ def _print_plan(files: list[DataverseFile], config: Config, destination: Path) -
     print(f"free space   : {free / 1024**3:.2f} GiB")
     print(f"restricted   : {[f.filename for f in files if f.restricted] or 'none'}")
     print()
-    for f in files[:3]:
-        print(f"  {f.file_id:<9} {f.filename:<40} {f.filesize:>13,} B  md5={f.md5}")
-    if len(files) > 6:
+
+    def show(entry: DataverseFile) -> None:
+        print(f"  {entry.file_id:<9} {entry.filename:<40} {entry.filesize:>13,} B  md5={entry.md5}")
+
+    # Elide the middle only when there is a middle to elide; a short list
+    # (say --limit 1) must not print the same file as both head and tail.
+    if len(files) <= 6:
+        for f in files:
+            show(f)
+    else:
+        for f in files[:3]:
+            show(f)
         print(f"  ... {len(files) - 6} more ...")
-    for f in files[-3:]:
-        print(f"  {f.file_id:<9} {f.filename:<40} {f.filesize:>13,} B  md5={f.md5}")
+        for f in files[-3:]:
+            show(f)
     return total
 
 
