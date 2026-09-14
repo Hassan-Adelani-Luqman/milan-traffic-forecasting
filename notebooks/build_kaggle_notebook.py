@@ -93,6 +93,7 @@ LIMIT = None
     md("## 2. Clone the repository and install dependencies"),
     code(
         """
+import importlib
 import shutil
 import subprocess
 import sys
@@ -116,9 +117,25 @@ subprocess.run(
 if str(REPO_DIR) not in sys.path:
     sys.path.insert(0, str(REPO_DIR))
 
+# Drop any previously imported src.* modules. Re-running this cell replaces the
+# files on disk, but sys.modules still holds the code objects compiled from the
+# old ones, so the kernel would keep executing the previous version -- visible
+# as a traceback whose line numbers land on docstrings.
+for name in [m for m in sys.modules if m == "src" or m.startswith("src.")]:
+    del sys.modules[name]
+importlib.invalidate_caches()
+
 print("repo:", subprocess.run(
     ["git", "-C", str(REPO_DIR), "log", "-1", "--format=%h %s"],
     capture_output=True, text=True).stdout.strip())
+
+# Dynamic, because the package only exists once the clone above has run.
+_check = importlib.import_module("src.memory_report")
+assert hasattr(_check, "_worker_environment"), (
+    "stale src/ still loaded: restart the kernel "
+    "(Run -> Restart & Clear Cell Outputs), then run all cells again"
+)
+print("src version: OK")
 """
     ),
     md(

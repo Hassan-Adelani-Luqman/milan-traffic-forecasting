@@ -139,6 +139,25 @@ def test_generator_reproduces_the_committed_notebook(tmp_path) -> None:
     assert regenerated["cells"], "generator produced an empty notebook"
 
 
+def test_clone_cell_purges_cached_src_modules(code_cells: list[str]) -> None:
+    """Re-running the clone cell must not leave the old modules loaded.
+
+    Replacing files on disk does not invalidate sys.modules, so a second run
+    would keep executing the previous version -- which surfaces as a traceback
+    whose line numbers land on docstrings, and is baffling to debug.
+    """
+    joined = "\n".join(code_cells)
+    assert "del sys.modules[name]" in joined
+    assert "invalidate_caches" in joined
+
+
+def test_clone_cell_asserts_the_loaded_version(code_cells: list[str]) -> None:
+    """A stale module should fail loudly in cell 2, not 40 minutes later."""
+    joined = "\n".join(code_cells)
+    assert "_worker_environment" in joined
+    assert "restart the kernel" in joined.lower()
+
+
 def test_working_dir_is_cleaned_before_publishing(code_cells: list[str]) -> None:
     """The saved output becomes a dataset; the repo clone should not be in it."""
     joined = "\n".join(code_cells)
