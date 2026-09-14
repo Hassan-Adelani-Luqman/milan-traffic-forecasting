@@ -36,7 +36,13 @@ class Task:
 TASKS: tuple[Task, ...] = (
     Task("env", "src.env_report", "Record hardware and library versions"),
     Task("download", "src.download", "Fetch the 62 daily CDR files and the Milano Grid"),
-    Task("ingest", "src.ingest", "Convert raw text to per-day parquet, with memory evidence"),
+    Task("ingest", "src.ingest", "Convert raw text to per-day blocks, with memory evidence"),
+    Task(
+        "pipeline",
+        "src.pipeline",
+        "Stream download -> ingest -> delete, one day at a time (use on Kaggle)",
+    ),
+    Task("benchmark", "src.memory_report", "Benchmark ingest strategies in isolated processes"),
     Task("matrix", "src.build_matrix", "Assemble the 8928 x 10000 matrix and per-square totals"),
     Task("eda", "src.eda", "Produce exploratory figures, statistics and the selected series"),
     Task("train", "src.train", "Train and tune the three models"),

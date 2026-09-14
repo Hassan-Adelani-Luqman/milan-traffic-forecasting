@@ -18,11 +18,11 @@ from src.build_matrix import (
     MatrixError,
     MatrixReport,
     _runs,
-    _to_local,
     apply_missing_policy,
     assemble_matrix,
     load_matrix,
     save_matrix,
+    to_local,
 )
 from src.config import load_config
 
@@ -174,7 +174,7 @@ def test_local_times_start_at_local_midnight(config) -> None:
 
 def test_to_local_applies_the_cet_offset() -> None:
     utc = np.array(["2013-11-01T12:00:00"], dtype="datetime64[ns]")
-    local = _to_local(utc, "Europe/Rome")
+    local = to_local(utc, "Europe/Rome")
     assert str(local[0]).startswith("2013-11-01T13:00")  # CET = UTC+1
 
 

@@ -48,7 +48,15 @@ import numpy as np
 from src.config import Config, load_config
 from src.memory_profiling import format_bytes, measure
 
-__all__ = ["MatrixReport", "assemble_matrix", "save_matrix", "load_matrix"]
+__all__ = [
+    "MatrixReport",
+    "assemble_matrix",
+    "apply_missing_policy",
+    "expected_days",
+    "to_local",
+    "save_matrix",
+    "load_matrix",
+]
 
 
 class MatrixError(RuntimeError):
@@ -83,7 +91,7 @@ class MatrixReport:
 # --------------------------------------------------------------------------
 
 
-def _expected_days(config: Config) -> list[str]:
+def expected_days(config: Config) -> list[str]:
     """Every date the observation period should contain, in order."""
     start, end = config.dataset.start_date, config.dataset.end_date
     return [
@@ -101,7 +109,7 @@ def _available_days(interim_dir: Path) -> dict[str, Path]:
     return days
 
 
-def _to_local(timestamps: np.ndarray, timezone: str) -> np.ndarray:
+def to_local(timestamps: np.ndarray, timezone: str) -> np.ndarray:
     """Convert UTC ``datetime64[ns]`` to wall-clock time in ``timezone``.
 
     Returned as naive ``datetime64`` carrying local wall time, which is what
@@ -150,9 +158,9 @@ def assemble_matrix(config: Config) -> tuple[np.ndarray, np.ndarray, np.ndarray,
     """
     interim = config.paths.interim
     available = _available_days(interim)
-    expected_days = _expected_days(config)
+    all_days = expected_days(config)
 
-    absent_days = [d for d in expected_days if d not in available]
+    absent_days = [d for d in all_days if d not in available]
     if absent_days:
         raise MatrixError(
             f"{len(absent_days)} day(s) not ingested, first missing {absent_days[0]}. "
@@ -167,7 +175,7 @@ def assemble_matrix(config: Config) -> tuple[np.ndarray, np.ndarray, np.ndarray,
     total_absent = 0
     wrong_length: list[str] = []
     row = 0
-    for date in expected_days:
+    for date in all_days:
         block = np.load(available[date], mmap_mode="r")
         times = np.load(interim / f"{date}.times.npy")
         stats = json.loads((interim / f"{date}.json").read_text(encoding="utf-8"))
@@ -195,13 +203,13 @@ def assemble_matrix(config: Config) -> tuple[np.ndarray, np.ndarray, np.ndarray,
         )
 
     missing = _check_grid(all_times, config)
-    local = _to_local(all_times, config.dataset.timezone)
+    local = to_local(all_times, config.dataset.timezone)
     _assert_no_dst_shift(local, config)
 
     square_ids = np.arange(1, n_squares + 1, dtype=np.uint16)
     report = MatrixReport(
         shape=(int(matrix.shape[0]), int(matrix.shape[1])),
-        n_days=len(expected_days),
+        n_days=len(all_days),
         first_timestamp_utc=str(all_times[0]),
         last_timestamp_utc=str(all_times[-1]),
         first_timestamp_local=str(local[0]),
@@ -318,7 +326,7 @@ def save_matrix(
 
     processed = config.paths.processed
     processed.mkdir(parents=True, exist_ok=True)
-    local = _to_local(utc_times, config.dataset.timezone)
+    local = to_local(utc_times, config.dataset.timezone)
 
     paths = {
         "matrix": processed / "traffic_matrix.npy",
@@ -392,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
 
     with measure("assemble_matrix", trace_python_allocs=False) as report_mem:
         matrix, utc_times, square_ids, report = assemble_matrix(config)
-        local = _to_local(utc_times, config.dataset.timezone)
+        local = to_local(utc_times, config.dataset.timezone)
         matrix = apply_missing_policy(matrix, local, config, report)
         paths = save_matrix(matrix, utc_times, square_ids, report, config)
 
