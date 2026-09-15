@@ -13,8 +13,8 @@
 | 1 — Download | ✅ complete | `6134e20`, `c8020ba`, `8e97e62` |
 | 2 — Ingest and memory evidence | ✅ complete | `8935f90`, `bb8a2e1`, `b5dd29b`, `1a83913` |
 | 3 — Exploratory analysis | ✅ complete | `f64da2d`, `8cc9bd1`, `9e780f3` |
-| **3b — Related work and model selection** | ⬜ **next** — gap found after the plan was written | |
-| 4 — Forecasting framework | ⬜ | |
+| **3b — Related work and model selection** | ✅ complete — gap found after the plan was written | |
+| 4 — Forecasting framework | ⬜ **next** | |
 | 5 — Models and experimentation | ⬜ | |
 | 6 — Evaluation and failure analysis | ⬜ | |
 | 7 — Reproducibility and repo polish | ⬜ | |
@@ -397,8 +397,33 @@ complete.
 implementations, but Phase 4 (the framework, baselines and metrics) is model-agnostic and
 can proceed in parallel if that is convenient.
 
-> **CHECKPOINT 3b** — the three justifications, the reference list, and an explicit
-> statement of whether the line-up survived the review unchanged.
+> **CHECKPOINT 3b** ✅ — `report/RELATED_WORK.md` and `report/references.md`.
+> Ten sources, each verified against the publisher, arXiv or proceedings record.
+>
+> **The line-up survived unchanged**, but the review altered three things the report
+> should claim about it:
+> 1. **LightGBM is the strongest prior favourite**, not the token non-neural model —
+>    the M5 competition was won by gradient-boosted trees, with LightGBM the most-used
+>    model among the winners.
+> 2. **The literature does not predict a winner here.** Azari *et al.* favour LSTM over
+>    ARIMA; Makridakis *et al.* favour boosted trees over both. The comparison is
+>    genuinely open rather than a confirmation exercise.
+> 3. **The univariate restriction is now a limitation with evidence behind it.** Zhang
+>    and Patras show spatial information helps materially on this exact grid, which makes
+>    it a quantified gap for Future Work rather than an afterthought.
+>
+> **Closest published analogue:** Santos *et al.* (2022) forecast short-term Milan
+> traffic with LSTM and GRU, clustering cells by activity first — independently reaching
+> this study's conclusion that cells differ too much to be treated uniformly. They did
+> not test gradient boosting, which leaves a gap this study occupies.
+>
+> **Considered and rejected:** GRU in place of LSTM. Cheaper and shown effective on this
+> data, but it occupies the same "learn from raw sequence" position, so substituting it
+> would not change what the comparison tests. Recorded as a reasonable alternative.
+>
+> **Outstanding:** the characterisations are drawn from abstracts and publisher
+> summaries. The full text of five sources must be read before submission — flagged at
+> the head of `RELATED_WORK.md` and in the verification table in `references.md`.
 
 ---
 
@@ -590,7 +615,7 @@ report prose.
 | 6 | May Dec 23 – Jan 1 be a stress set? | **Yes**, never tuned on. |
 | 7 | Do naive baselines count toward the three? | **No**, they are extra. |
 | 8 | May sMAPE/WAPE/MASE supplement MAPE? | **Yes.** MASE is the cross-area comparison. |
-| 9 | Model 3 — LightGBM or TCN? | **LightGBM.** |
+| 9 | Model 3 — LightGBM or TCN? | **LightGBM.** Reinforced by Phase 3b: the M5 competition was won by gradient-boosted trees. |
 
 ### Resolved during execution
 
@@ -601,6 +626,8 @@ report prose.
 | Missing-data policy | Absent cell → `0.0` and counted (a row exists only where activity occurred). Whole missing intervals: interpolate ≤ 3, else NaN and report; raise if inside the test week. **Never fired — the grid is complete.** |
 | Per-day storage format | `.npy` + JSON sidecar, not Parquet. |
 | Ingest strategy for the full run | `polars_lazy` — Kaggle has ~30 GB RAM, so speed wins. |
+| LSTM or GRU? | **LSTM.** GRU is cheaper and shown effective on this dataset by Santos *et al.*, but occupies the same position in the comparison. Noted as an alternative, not adopted. |
+| Did the literature review change the model line-up? | **No.** It changed what the report should claim about it — see CHECKPOINT 3b. |
 
 ---
 
@@ -623,13 +650,13 @@ This is the mapping, with what blocks each.
 | Report section | Brief section | Depends on | State |
 |---|---|---|---|
 | Introduction | — | nothing | writable |
-| Related Work | §3 | Phase 3b | **blocked — review not done** |
+| Related Work | §3 | Phase 3b ✅ | writable |
 | Dataset and Data Preparation | §1 | Phase 2 ✅ | writable |
 | Exploratory Analysis | §2 | Phase 3 ✅ | writable |
-| Methodology | §3, §4 | Phases 3b, 4, 5 | blocked |
+| Methodology | §3, §4 | Phases 3b ✅, 4, 5 | blocked on 4-5 |
 | Results and Discussion | §4 | Phases 5, 6 | blocked |
 | Conclusion and Future Work | — | all of the above | blocked |
-| References | — | Phase 3b | blocked |
+| References | — | Phase 3b ✅ | writable — repo and video links still to add |
 
 Also required by the brief and not produced by any phase:
 
