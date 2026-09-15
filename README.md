@@ -30,7 +30,7 @@ Three properties of the raw files drive the whole design:
 1. **Rows are split by country code.** A single `(square_id, time_ms)` pair appears
    many times, once per counterparty country. Traffic must be aggregated with
    `group_by(["square_id", "time_ms"]).sum()` before use — this is why a day holds
-   ~4.8 M rows rather than 1.44 M (about 3.4 country rows per cell, up to 246).
+   ~5.16 M rows rather than 1.44 M (3.6 country rows per cell on average, at most 36).
 2. **After aggregation the data is small.** The full `8928 × 10000` matrix is 340.6 MiB
    as `float32`. The memory-management problem is entirely about getting from 20 GB of
    text to that matrix without ever holding more than one day in RAM.

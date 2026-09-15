@@ -1,17 +1,20 @@
 """Convert raw daily CDR text into dense per-day traffic blocks.
 
-The dataset ships as 62 tab-separated files of roughly 4.8 M rows each, ~19.4
+The dataset ships as 62 tab-separated files averaging 5.16 M rows each, 19.38
 GiB in total. The whole memory-management problem is getting from that to a
-``8928 x 10000`` float32 matrix (~357 MB) without ever holding more than one
+``8928 x 10000`` float32 matrix (340.58 MiB) without ever holding more than one
 day in RAM.
 
 Why the raw files are so much larger than the information they carry
 --------------------------------------------------------------------
 Rows are split by the counterparty's country code, so a single
 ``(square_id, time_ms)`` pair appears once per country that generated traffic
-there -- about 3.4 rows on average, and up to 246. Aggregating over country is
-therefore not an optional tidy-up; it is what turns 4.8 M rows into the 1.44 M
-cells a day actually contains.
+there -- 3.6 rows on average across the period, and at most 36. Aggregating over
+country is therefore not an optional tidy-up; it is what turns ~5.16 M rows into
+the 1.44 M cells a day actually contains.
+
+(A file contains up to 246 distinct country codes, which is not the same as the
+number of rows per cell; conflating the two overstates the duplication by 7x.)
 
 Only three of the eight columns are needed (``square_id``, ``time_ms``,
 ``internet``), so projection pushdown discards 5/8 of the parsed data before it
@@ -32,16 +35,20 @@ Measured trade-off
 ------------------
 The two optimised strategies do not rank the same way on both axes, and the
 assumption that the faster engine is also the leaner one turned out to be
-wrong. Polars is roughly 3x faster per day but peaks near 510 MiB, because its
+wrong. Polars is roughly 6x faster per day but peaks at 552 MiB, because its
 CSV reader pulls the whole ~322 MB file into memory before parsing; batched
-reading and ``low_memory=True`` were both measured and made it worse, not
-better. Chunked pandas peaks around 117 MiB because ``chunksize`` bounds
-residency by construction.
+reading (697-862 MiB) and ``low_memory=True`` (559 MiB) were both measured and
+made it worse, not better. Chunked pandas peaks at 173 MiB because ``chunksize``
+bounds residency by construction.
+
+These are the subprocess-isolated figures. An earlier in-process benchmark
+reported 544, 184 and 384 MiB for identical work, because freed arenas are not
+returned to the OS and whichever strategy ran first absorbed the heap growth.
 
 Which to prefer therefore depends on the machine, not on a general ranking, so
 both are kept and ``--strategy`` selects. What actually matters is that both
 are O(1) in the number of days: only one 5.49 MiB block is ever resident, where
-the naive path would need ~18 GiB to hold the same 62 days.
+the naive path would need 17.90 GiB to hold the same 62 days.
 
 Missing cells
 -------------
@@ -381,7 +388,7 @@ def _collect_streaming(plan: pl.LazyFrame) -> pl.DataFrame:
 def ingest_day_polars(path: Path, config: Config) -> DayBlock:
     """Aggregate a day with a lazy Polars scan and streaming group-by.
 
-    The full ~4.8 M rows are never materialised: projection pushdown drops five
+    The ~5.16 M rows are never materialised: projection pushdown drops five
     of eight columns at parse time, and the group-by reduces to ~1.44 M pairs
     inside the engine.
 

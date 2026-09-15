@@ -69,7 +69,7 @@ established by inspection rather than assumed.
 
 **Records are split by country code.** A single `(square_id, time_ms)` pair appears once
 for every country that generated traffic in that cell and interval — on average 3.6
-times, and up to 246. Aggregating over country is therefore not a tidying step but the
+times, and at most 36. Aggregating over country is therefore not a tidying step but the
 operation that recovers the quantity of interest. It is also the reason a day holds
 roughly 5.16 million records rather than the 1.44 million cells it describes. Across the
 period, **319,896,289 raw records** reduce to 89,280,000 cells.

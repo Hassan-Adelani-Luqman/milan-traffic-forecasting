@@ -58,7 +58,9 @@ forecasting of mobile internet traffic in Milan, evaluated on the week
 
 1. **Rows are split by `country_code`.** One `(square_id, time_ms)` pair has many rows.
    You **must** `groupby(["square_id","time_ms"]).sum()` on `internet` to get the area's
-   total. *Measured: ~4.8 M rows/day, about 3.4 country rows per cell, up to 246.*
+   total. *Measured across all 62 days: 5.16 M rows/day on average, 3.6 country rows
+   per cell, at most 36. (246 is the count of distinct country codes in a file, which
+   is a different quantity.)*
 2. **After aggregation the data is small.** `8928 × 10000` as `float32` is **340.58 MiB**.
    The entire memory-management deliverable is getting from 19.38 GiB of text to that
    matrix while never holding more than one day in RAM.
