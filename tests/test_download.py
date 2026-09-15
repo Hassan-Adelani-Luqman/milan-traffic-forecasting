@@ -417,6 +417,57 @@ def test_each_attempt_requests_a_fresh_signed_url(
 # --------------------------------------------------------------------------
 
 
+def test_plan_listing_does_not_repeat_files(capsys) -> None:
+    """With six or fewer files the head and tail slices used to overlap.
+
+    A --limit 1 dry run printed the same file twice, which looks like a
+    duplicate download rather than a display quirk.
+    """
+    from src.config import load_config
+    from src.download import _print_plan
+
+    files = [
+        DataverseFile(
+            file_id=i,
+            filename=f"sms-call-internet-mi-2013-11-{i:02d}.txt",
+            filesize=1000,
+            md5="0" * 32,
+            content_type="text/plain",
+            restricted=False,
+        )
+        for i in range(1, 4)
+    ]
+    config = load_config(auto_env=False)
+
+    _print_plan(files, config, config.paths.raw)
+    printed = capsys.readouterr().out
+    for entry in files:
+        assert printed.count(entry.filename) == 1, entry.filename
+
+
+def test_plan_listing_elides_the_middle_of_a_long_list(capsys) -> None:
+    from src.config import load_config
+    from src.download import _print_plan
+
+    files = [
+        DataverseFile(
+            file_id=i,
+            filename=f"sms-call-internet-mi-2013-11-{i:02d}.txt",
+            filesize=1000,
+            md5="0" * 32,
+            content_type="text/plain",
+            restricted=False,
+        )
+        for i in range(1, 21)
+    ]
+    config = load_config(auto_env=False)
+
+    _print_plan(files, config, config.paths.raw)
+    printed = capsys.readouterr().out
+    assert "more ..." in printed
+    assert printed.count("sms-call-internet") == 6
+
+
 def test_verify_md5(tmp_path: Path) -> None:
     target = tmp_path / "f.bin"
     target.write_bytes(b"hello")
