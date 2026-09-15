@@ -14,8 +14,8 @@
 | 2 — Ingest and memory evidence | ✅ complete | `8935f90`, `bb8a2e1`, `b5dd29b`, `1a83913` |
 | 3 — Exploratory analysis | ✅ complete | `f64da2d`, `8cc9bd1`, `9e780f3` |
 | **3b — Related work and model selection** | ✅ complete — gap found after the plan was written | |
-| 4 — Forecasting framework | ⬜ **next** | |
-| 5 — Models and experimentation | ⬜ | |
+| 4 — Forecasting framework | ✅ complete | |
+| 5 — Models and experimentation | ⬜ **next** | |
 | 6 — Evaluation and failure analysis | ⬜ | |
 | 7 — Reproducibility and repo polish | ⬜ | |
 | 8 — Report support artefacts | 🟡 partial — evidence pack scaffolded | |
@@ -484,8 +484,33 @@ No leakage in `make_windows` and `lag_features`; scaler round-trip; `SeasonalNai
 reproduces a synthetic periodic series exactly; split lengths; MASE equals 1.0 when
 predictions equal seasonal naive.
 
-> **CHECKPOINT 4** — report both baseline metric tables for all three areas.
-> **These numbers are the bar every model must clear.**
+> **CHECKPOINT 4** ✅ — baselines on the test week, 16-22 December.
+>
+> | area | model | MAE | RMSE | MAPE % | MASE | R² |
+> |---|---|---:|---:|---:|---:|---:|
+> | 5161 (rank 1) | persistence | **92.80** | 134.88 | 9.19 | **0.267** | **0.9902** |
+> | | seasonal naive | 338.59 | 619.04 | 25.94 | 0.975 | 0.7934 |
+> | 4159 (rank 424) | persistence | **15.95** | 21.54 | 6.98 | **0.195** | 0.9688 |
+> | | seasonal naive | 51.19 | 84.64 | 21.80 | 0.626 | 0.5179 |
+> | 4556 (rank 109) | persistence | **28.86** | 39.62 | 6.60 | **0.257** | 0.9407 |
+> | | seasonal naive | 76.34 | 108.35 | 17.46 | 0.680 | 0.5568 |
+>
+> **Persistence is a far harder baseline than seasonal naive**, by a factor of
+> 2.7 to 3.6 on MAE, and reaches R² = 0.99 on the busiest area. That follows
+> from the lag-1 autocorrelation of 0.987 measured in Phase 3: at a 10-minute
+> horizon the previous observation is nearly all of the signal, while the
+> same-time-yesterday value is a whole day stale.
+>
+> **This reframes Phase 5.** The question is not whether a model beats a naive
+> forecast but whether it beats MASE 0.267, 0.195 and 0.257 -- and a model that
+> lands near persistence has probably learned to copy its last input rather
+> than to forecast. The lag-1 copying check in Phase 6 is therefore a primary
+> diagnostic, not a footnote.
+>
+> Worth noting for the write-up: the two baselines rank the areas differently.
+> Persistence finds 4159 easiest (MASE 0.195) while seasonal naive finds it
+> hardest relative to 5161. Difficulty is not a property of an area alone but
+> of the area and the method together.
 
 ---
 

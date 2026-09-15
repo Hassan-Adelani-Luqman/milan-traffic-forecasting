@@ -30,6 +30,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ARG"]  # pytest fixtures are passed but not always referenced
+# Forecaster subclasses must accept the full interface signature even where a
+# particular model has no use for an argument; that is the point of the ABC.
+"src/models/*" = ["ARG002"]
 
 [tool.ruff.format]
 quote-style = "double"
