@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from src.config import Config, load_config
+from src.facts import collect_facts, write_facts
 
 __all__ = ["export_report"]
 
@@ -500,10 +501,16 @@ def export_report(config: Config) -> dict[str, Any]:
     report_dir.mkdir(parents=True, exist_ok=True)
 
     counts = _copy_artifacts(config, report_dir)
+    # The registry is regenerated first, so the summary and any marked prose
+    # resolve against current figures rather than a stale copy.
+    facts = collect_facts(config)
+    facts_json, facts_md = write_facts(facts, report_dir)
     summary = _results_summary(report_dir)
     index = _figure_index(report_dir)
 
     print(f"copied {counts['figures']} figures and {counts['tables']} tables into {report_dir}")
+    print(f"wrote {facts_json} ({len(facts.flat())} facts)")
+    print(f"wrote {facts_md}")
     print(f"wrote {summary}")
     print(f"wrote {index}")
     return {"counts": counts, "summary": summary, "index": index}

@@ -54,6 +54,7 @@ TASKS: tuple[Task, ...] = (
     Task("eda", "src.run_eda", "Produce exploratory figures, statistics and the selected series"),
     Task("train", "src.train", "Train and tune the three models"),
     Task("evaluate", "src.evaluate", "Evaluate on the test week; write metrics and diagnostics"),
+    Task("facts", "src.facts", "Regenerate the named fact registry from the artefacts"),
     Task("report", "src.export_report", "Export figures and tables into report/"),
     Task("test", "pytest", "Run the test suite", takes_config=False),
     Task("lint", "ruff", "Lint src/ and tests/", takes_config=False),

@@ -301,12 +301,42 @@ Square 5161 swings by a factor of 99 between its peak and its first-percentile t
 falls to 13% of its mean overnight; square 4556 swings by a factor of 17 and retains a
 night floor at 53% of its mean. Their coefficients of variation differ by a factor of two.
 
-The weekly patterns separate them further, and admit interpretation. Square 5161 is *busier*
-at weekends than on weekdays (ratio 1.384), consistent with a location driven by leisure or
-nightlife. Square 5259 shows the opposite extreme at 0.425, consistent with a
-business district that empties at weekends. Square 4159 sits at 0.587 and square 4556 at
-1.140. These are different forecasting problems, and a model that handles one well need not
-handle the others.
+The weekly patterns separate them further, and the grid geometry published with the
+dataset [12] allows the pattern to be checked rather than merely inferred. Converting each
+cell identifier to its centroid and measuring the distance to known reference points gives
+Table 4.
+
+**Table 4 — Where each study area is.**
+
+| Square | Centroid (lat, lon) | Nearest reference point | Distance | Weekend ÷ weekday |
+|---|---|---|---:|---:|
+| 5161 | 45.4655, 9.1934 | Galleria Vittorio Emanuele II | 276 m | 1.384 |
+| 5059 | 45.4634, 9.1874 | Duomo | 226 m | 0.861 |
+| 5259 | 45.4676, 9.1874 | Teatro alla Scala | 167 m | 0.425 |
+| 4159 | 45.4443, 9.1873 | Università Bocconi | 365 m | 0.587 |
+| 4556 | 45.4528, 9.1783 | Navigli | 273 m | 1.140 |
+
+Two of the five match their temporal signature closely. Square 4556 lies 273 m from the
+Navigli, Milan's principal nightlife district, and has both the highest night floor of the
+five (53% of its mean) and a weekend ratio above one — the profile of an area that stays
+active late and is busier at weekends. Square 4159 lies 365 m from Università Bocconi, and
+its weekend ratio of 0.587 together with a high night floor is what a university quarter
+with substantial resident population would produce.
+
+The three busiest cells are the more interesting result, and it qualifies the reading
+offered above. All three sit within 500 m of the Duomo, and yet their weekend ratios span
+**0.425 to 1.384** — a factor of 3.3 between cells that are themselves only a few hundred
+metres apart. Square 5259, closest to Teatro alla Scala and the municipal and banking
+offices around Piazza della Scala, empties at weekends; square 5161, beside the Galleria
+Vittorio Emanuele II, fills up. Proximity to a landmark is therefore evidence about a
+cell's location but not a sufficient explanation of its traffic: two neighbouring cells in
+the same historic centre behave in opposite ways.
+
+That finding reinforces the case made in Section 3.2 from a second direction. It is not
+only that the three highest-traffic cells are spatially adjacent; it is that traffic
+character varies at a finer spatial scale than volume rank reveals, so ranking by total
+activity carries no information about temporal behaviour. These are different forecasting
+problems, and a model that handles one well need not handle the others.
 
 ## 3.4 First additional analysis: multi-seasonal decomposition
 
@@ -316,7 +346,7 @@ using MSTL [7], which extends seasonal-trend decomposition by Loess to multiple 
 periods, with periods of 144 intervals (one day) and 1,008 (one week). Figure 5 shows the
 components.
 
-**Table 4 — MSTL variance decomposition, square 5161.**
+**Table 5 — MSTL variance decomposition, square 5161.**
 
 | Component | Share of variance | Strength |
 |---|---:|---:|
@@ -355,9 +385,9 @@ rather than a short-memory process.
 
 Stationarity was assessed with the Augmented Dickey–Fuller and KPSS tests together, since
 their null hypotheses are opposites and agreement between them is more informative than
-either alone. Table 5 reports both on the raw series and on two transformations.
+either alone. Table 6 reports both on the raw series and on two transformations.
 
-**Table 5 — Stationarity tests, square 5161.**
+**Table 6 — Stationarity tests, square 5161.**
 
 | Series | ADF statistic | ADF p | KPSS statistic | KPSS p | Verdict |
 |---|---:|---:|---:|---:|---|
@@ -468,7 +498,8 @@ with MAE, RMSE and MAPE reported per area.
 - **Figure numbering** assumes Figures 1–8 map to `report/figures/01`–`08` in order; renumber if
   the final report includes figures from other sections ahead of these.
 - **Citation numbers** follow `report/references.md`.
-- **Section 3.3** interprets the weekend ratios as leisure and business districts. That is
-  inference from the ratios, not established from the grid geometry. Either soften the
-  wording or verify by joining the cell centroids to their real-world coordinates.
+- **Section 3.3** was verified against the Milano Grid geometry rather than left as
+  inference; `src/geo.py` performs the lookup and `tests/test_geo.py` pins it. The
+  landmark distances establish where each cell is, not what drives its traffic, and the
+  text says so.
 - **The AI-use disclosure required by the brief is not yet written.**

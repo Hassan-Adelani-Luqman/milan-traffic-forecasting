@@ -1,0 +1,744 @@
+{
+  "absent_cells": {
+    "value": 34682,
+    "display": "34,682",
+    "unit": "cells",
+    "source": "matrix_report.json",
+    "description": "Cells with no record at all"
+  },
+  "absent_cells_pct": {
+    "value": 0.03884632616487455,
+    "display": "0.0388",
+    "unit": "%",
+    "source": "derived",
+    "description": "Absent cells as a share of the grid"
+  },
+  "acf_at_daily": {
+    "value": 0.8783003223695056,
+    "display": "0.878",
+    "unit": "",
+    "source": "autocorrelation.json",
+    "description": "Autocorrelation at the daily lag"
+  },
+  "acf_at_weekly": {
+    "value": 0.8376899171535487,
+    "display": "0.838",
+    "unit": "",
+    "source": "autocorrelation.json",
+    "description": "Autocorrelation at the weekly lag"
+  },
+  "anomalies_evaluable": {
+    "value": 8784,
+    "display": "8,784",
+    "unit": "intervals",
+    "source": "derived",
+    "description": "Intervals the detector can assess; the first day cannot be"
+  },
+  "anomalies_flagged": {
+    "value": 152,
+    "display": "152",
+    "unit": "intervals",
+    "source": "anomalies.csv",
+    "description": "Intervals flagged against a seasonal-naive predictor"
+  },
+  "anomalies_holiday_share": {
+    "value": 0.23026315789473684,
+    "display": "23.0%",
+    "unit": "%",
+    "source": "derived",
+    "description": "Share of flags on holidays"
+  },
+  "anomalies_on_holidays": {
+    "value": 35,
+    "display": "35",
+    "unit": "intervals",
+    "source": "anomalies.csv",
+    "description": "Flagged intervals falling on a holiday"
+  },
+  "anomalies_rate": {
+    "value": 0.017304189435336976,
+    "display": "1.73%",
+    "unit": "%",
+    "source": "derived",
+    "description": "Flagged share of evaluable intervals"
+  },
+  "bottom_50pct_share": {
+    "value": 0.11618356800409319,
+    "display": "11.6%",
+    "unit": "%",
+    "source": "distribution_stats.json",
+    "description": "bottom 50pct share"
+  },
+  "cv_4159": {
+    "value": 0.6596636979707968,
+    "display": "0.660",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "cv for square 4159"
+  },
+  "cv_4556": {
+    "value": 0.48452215995762643,
+    "display": "0.485",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "cv for square 4556"
+  },
+  "cv_5059": {
+    "value": 0.768430371195264,
+    "display": "0.768",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "cv for square 5059"
+  },
+  "cv_5161": {
+    "value": 0.9682343570825493,
+    "display": "0.968",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "cv for square 5161"
+  },
+  "cv_5259": {
+    "value": 0.938988131837363,
+    "display": "0.939",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "cv for square 5259"
+  },
+  "distinct_country_codes_per_file": {
+    "value": 246,
+    "display": "246",
+    "unit": "codes",
+    "source": "measured on 2013-11-01",
+    "description": "Distinct country codes in one daily file -- NOT rows per cell"
+  },
+  "download_mbit_per_s": {
+    "value": 468.57665556306307,
+    "display": "469",
+    "unit": "Mbit/s",
+    "source": "derived",
+    "description": "Sustained throughput in decimal megabits, not mebibits"
+  },
+  "download_mean_s": {
+    "value": 5.73,
+    "display": "5.73",
+    "unit": "s",
+    "source": "ingest_summary.json",
+    "description": "Mean download time per day"
+  },
+  "download_mib_per_s": {
+    "value": 55.85869020975388,
+    "display": "55.9",
+    "unit": "MiB/s",
+    "source": "derived",
+    "description": "Sustained download throughput"
+  },
+  "download_std_s": {
+    "value": 0.64,
+    "display": "0.64",
+    "unit": "s",
+    "source": "ingest_summary.json",
+    "description": "Standard deviation of download time per day"
+  },
+  "download_total_min": {
+    "value": 5.92,
+    "display": "5.92",
+    "unit": "min",
+    "source": "ingest_summary.json",
+    "description": "Total download time"
+  },
+  "forecast_squares": {
+    "value": "5161, 4159, 4556",
+    "display": "5161, 4159, 4556",
+    "unit": "",
+    "source": "selected_areas.json",
+    "description": "Cells modelled in Section 4"
+  },
+  "gini": {
+    "value": 0.6080800353087665,
+    "display": "0.608",
+    "unit": "",
+    "source": "distribution_stats.json",
+    "description": "Gini coefficient of cell totals"
+  },
+  "grid_cells_total": {
+    "value": 89280000,
+    "display": "89,280,000",
+    "unit": "cells",
+    "source": "derived",
+    "description": "Timestamps x squares"
+  },
+  "ingest_mean_s": {
+    "value": 1.49,
+    "display": "1.49",
+    "unit": "s",
+    "source": "ingest_summary.json",
+    "description": "Mean ingest time per day"
+  },
+  "ingest_std_s": {
+    "value": 0.1,
+    "display": "0.10",
+    "unit": "s",
+    "source": "ingest_summary.json",
+    "description": "Standard deviation of ingest time per day"
+  },
+  "ingest_total_min": {
+    "value": 1.54,
+    "display": "1.54",
+    "unit": "min",
+    "source": "ingest_summary.json",
+    "description": "Total ingest time"
+  },
+  "kurtosis": {
+    "value": 25.502203875110496,
+    "display": "25.50",
+    "unit": "",
+    "source": "distribution_stats.json",
+    "description": "Excess kurtosis of cell totals"
+  },
+  "lag_1": {
+    "value": 0.987108744783174,
+    "display": "0.987",
+    "unit": "",
+    "source": "autocorrelation.json",
+    "description": "Lag-1 autocorrelation"
+  },
+  "lognormal_ks_stat": {
+    "value": 0.023173012329069598,
+    "display": "0.0232",
+    "unit": "",
+    "source": "distribution_stats.json",
+    "description": "KS statistic against the lognormal fit"
+  },
+  "lognormal_mu": {
+    "value": 12.495506384207417,
+    "display": "12.496",
+    "unit": "",
+    "source": "distribution_stats.json",
+    "description": "Fitted lognormal mu"
+  },
+  "lognormal_sigma": {
+    "value": 1.211135612927982,
+    "display": "1.211",
+    "unit": "",
+    "source": "distribution_stats.json",
+    "description": "Fitted lognormal sigma"
+  },
+  "matrix_mib": {
+    "value": 340.576171875,
+    "display": "340.58",
+    "unit": "MiB",
+    "source": "derived",
+    "description": "Assembled matrix as float32"
+  },
+  "max_over_median": {
+    "value": 45.84881337179026,
+    "display": "45.8",
+    "unit": "x",
+    "source": "distribution_stats.json",
+    "description": "Busiest cell relative to the median"
+  },
+  "max_rows_per_cell": {
+    "value": 36,
+    "display": "36",
+    "unit": "rows",
+    "source": "measured on 2013-11-01",
+    "description": "Most country-split records for a single (square, time) pair"
+  },
+  "mean_rows_per_cell": {
+    "value": 3.584460184230617,
+    "display": "3.6",
+    "unit": "rows",
+    "source": "derived",
+    "description": "Mean country-split records per occupied cell"
+  },
+  "mean_rows_per_day": {
+    "value": 5159617.564516129,
+    "display": "5.16 M",
+    "unit": "rows",
+    "source": "derived",
+    "description": "Mean records per day over the period"
+  },
+  "missing_intervals": {
+    "value": 0,
+    "display": "0",
+    "unit": "intervals",
+    "source": "matrix_report.json",
+    "description": "Timestamps absent from the grid"
+  },
+  "n_days": {
+    "value": 62,
+    "display": "62",
+    "unit": "days",
+    "source": "config",
+    "description": "Observation period length"
+  },
+  "n_squares": {
+    "value": 10000,
+    "display": "10,000",
+    "unit": "cells",
+    "source": "config",
+    "description": "Grid cells in Milan"
+  },
+  "n_timestamps": {
+    "value": 8928,
+    "display": "8,928",
+    "unit": "intervals",
+    "source": "config",
+    "description": "10-minute intervals in the period"
+  },
+  "n_zero_cells": {
+    "value": 0,
+    "display": "0",
+    "unit": "cells",
+    "source": "distribution_stats.json",
+    "description": "Cells with no activity at all"
+  },
+  "naive_pandas_peak_mib": {
+    "value": 633.0625,
+    "display": "633.06",
+    "unit": "MiB",
+    "source": "memory_report.csv",
+    "description": "Mean peak RSS for naive_pandas, one process per measurement"
+  },
+  "naive_pandas_resident_mib": {
+    "value": 295.570499420166,
+    "display": "295.57",
+    "unit": "MiB",
+    "source": "memory_report.csv",
+    "description": "Data resident after naive_pandas completes"
+  },
+  "naive_pandas_wall_s": {
+    "value": 5.558,
+    "display": "5.56",
+    "unit": "s",
+    "source": "memory_report.csv",
+    "description": "Mean wall time per day for naive_pandas"
+  },
+  "naive_projected_gib": {
+    "value": 17.895870082080364,
+    "display": "17.90",
+    "unit": "GiB",
+    "source": "derived, extrapolated",
+    "description": "Holding all 62 days the naive way; not executed"
+  },
+  "nan_after_policy": {
+    "value": 0,
+    "display": "0",
+    "unit": "cells",
+    "source": "matrix_report.json",
+    "description": "NaN remaining after the missing-data policy"
+  },
+  "nearest_4159": {
+    "value": "Universita Bocconi",
+    "display": "Universita Bocconi",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "Nearest reference point to square 4159"
+  },
+  "nearest_4556": {
+    "value": "Navigli",
+    "display": "Navigli",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "Nearest reference point to square 4556"
+  },
+  "nearest_5059": {
+    "value": "Duomo",
+    "display": "Duomo",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "Nearest reference point to square 5059"
+  },
+  "nearest_5161": {
+    "value": "Galleria Vittorio Emanuele II",
+    "display": "Galleria Vittorio Emanuele II",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "Nearest reference point to square 5161"
+  },
+  "nearest_5259": {
+    "value": "Teatro alla Scala",
+    "display": "Teatro alla Scala",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "Nearest reference point to square 5259"
+  },
+  "nearest_m_4159": {
+    "value": 365,
+    "display": "365",
+    "unit": "m",
+    "source": "area_summary.csv",
+    "description": "Distance from square 4159"
+  },
+  "nearest_m_4556": {
+    "value": 273,
+    "display": "273",
+    "unit": "m",
+    "source": "area_summary.csv",
+    "description": "Distance from square 4556"
+  },
+  "nearest_m_5059": {
+    "value": 226,
+    "display": "226",
+    "unit": "m",
+    "source": "area_summary.csv",
+    "description": "Distance from square 5059"
+  },
+  "nearest_m_5161": {
+    "value": 276,
+    "display": "276",
+    "unit": "m",
+    "source": "area_summary.csv",
+    "description": "Distance from square 5161"
+  },
+  "nearest_m_5259": {
+    "value": 167,
+    "display": "167",
+    "unit": "m",
+    "source": "area_summary.csv",
+    "description": "Distance from square 5259"
+  },
+  "night_floor_over_mean_4159": {
+    "value": 0.4892390039763247,
+    "display": "0.489",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "night floor over mean for square 4159"
+  },
+  "night_floor_over_mean_4556": {
+    "value": 0.5343157272423988,
+    "display": "0.534",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "night floor over mean for square 4556"
+  },
+  "night_floor_over_mean_5059": {
+    "value": 0.23493825416646202,
+    "display": "0.235",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "night floor over mean for square 5059"
+  },
+  "night_floor_over_mean_5161": {
+    "value": 0.1302629314722955,
+    "display": "0.130",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "night floor over mean for square 5161"
+  },
+  "night_floor_over_mean_5259": {
+    "value": 0.3333732465763313,
+    "display": "0.333",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "night floor over mean for square 5259"
+  },
+  "notable_lags": {
+    "value": "144, 1008, 864, 288, 432, 720",
+    "display": "144, 1008, 864, 288, 432, 720",
+    "unit": "",
+    "source": "autocorrelation.json",
+    "description": "Local ACF maxima"
+  },
+  "pandas_chunked_peak_mib": {
+    "value": 172.54557291666666,
+    "display": "172.55",
+    "unit": "MiB",
+    "source": "memory_report.csv",
+    "description": "Mean peak RSS for pandas_chunked, one process per measurement"
+  },
+  "pandas_chunked_resident_mib": {
+    "value": 5.4931640625,
+    "display": "5.49",
+    "unit": "MiB",
+    "source": "memory_report.csv",
+    "description": "Data resident after pandas_chunked completes"
+  },
+  "pandas_chunked_wall_s": {
+    "value": 5.861666666666667,
+    "display": "5.86",
+    "unit": "s",
+    "source": "memory_report.csv",
+    "description": "Mean wall time per day for pandas_chunked"
+  },
+  "peak_rss_max_mib": {
+    "value": 574,
+    "display": "574",
+    "unit": "MiB",
+    "source": "ingest_summary.json",
+    "description": "Peak RSS during the streaming run"
+  },
+  "peak_to_trough_4159": {
+    "value": 14.941806791278262,
+    "display": "14.942",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "peak to trough for square 4159"
+  },
+  "peak_to_trough_4556": {
+    "value": 16.981308018154685,
+    "display": "16.981",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "peak to trough for square 4556"
+  },
+  "peak_to_trough_5059": {
+    "value": 30.94341892859764,
+    "display": "30.943",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "peak to trough for square 5059"
+  },
+  "peak_to_trough_5161": {
+    "value": 99.38671399399438,
+    "display": "99.387",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "peak to trough for square 5161"
+  },
+  "peak_to_trough_5259": {
+    "value": 46.96406226691142,
+    "display": "46.964",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "peak to trough for square 5259"
+  },
+  "polars_lazy_peak_mib": {
+    "value": 552.2161458333334,
+    "display": "552.22",
+    "unit": "MiB",
+    "source": "memory_report.csv",
+    "description": "Mean peak RSS for polars_lazy, one process per measurement"
+  },
+  "polars_lazy_resident_mib": {
+    "value": 5.4931640625,
+    "display": "5.49",
+    "unit": "MiB",
+    "source": "memory_report.csv",
+    "description": "Data resident after polars_lazy completes"
+  },
+  "polars_lazy_wall_s": {
+    "value": 0.9506666666666668,
+    "display": "0.95",
+    "unit": "s",
+    "source": "memory_report.csv",
+    "description": "Mean wall time per day for polars_lazy"
+  },
+  "rank_4159": {
+    "value": 424,
+    "display": "424",
+    "unit": "",
+    "source": "selected_areas.json",
+    "description": "Rank of square 4159 by total activity"
+  },
+  "rank_4556": {
+    "value": 109,
+    "display": "109",
+    "unit": "",
+    "source": "selected_areas.json",
+    "description": "Rank of square 4556 by total activity"
+  },
+  "rank_5059": {
+    "value": 2,
+    "display": "2",
+    "unit": "",
+    "source": "selected_areas.json",
+    "description": "Rank of square 5059 by total activity"
+  },
+  "rank_5161": {
+    "value": 1,
+    "display": "1",
+    "unit": "",
+    "source": "selected_areas.json",
+    "description": "Rank of square 5161 by total activity"
+  },
+  "rank_5259": {
+    "value": 3,
+    "display": "3",
+    "unit": "",
+    "source": "selected_areas.json",
+    "description": "Rank of square 5259 by total activity"
+  },
+  "raw_bytes": {
+    "value": 20804803507,
+    "display": "20,804,803,507",
+    "unit": "bytes",
+    "source": "Dataverse file listing",
+    "description": "Total published dataset size"
+  },
+  "raw_gib": {
+    "value": 19.375983166508377,
+    "display": "19.38",
+    "unit": "GiB",
+    "source": "Dataverse file listing",
+    "description": "Total published dataset size"
+  },
+  "residual_over_observed_std": {
+    "value": 0.189802166286033,
+    "display": "19.0%",
+    "unit": "",
+    "source": "derived",
+    "description": "Residual standard deviation as a share of observed"
+  },
+  "skewness": {
+    "value": 4.264742434779422,
+    "display": "4.26",
+    "unit": "",
+    "source": "distribution_stats.json",
+    "description": "Skewness of cell totals"
+  },
+  "spectral_peak_1_hours": {
+    "value": 23.999999999999996,
+    "display": "24.00",
+    "unit": "h",
+    "source": "spectral_peaks.csv",
+    "description": "Dominant cycle 1"
+  },
+  "spectral_peak_2_hours": {
+    "value": 11.999999999999998,
+    "display": "12.00",
+    "unit": "h",
+    "source": "spectral_peaks.csv",
+    "description": "Dominant cycle 2"
+  },
+  "spectral_peak_3_hours": {
+    "value": 165.33333333333331,
+    "display": "165.33",
+    "unit": "h",
+    "source": "spectral_peaks.csv",
+    "description": "Dominant cycle 3"
+  },
+  "strength_seasonal_1008": {
+    "value": 0.7455415962291099,
+    "display": "0.746",
+    "unit": "",
+    "source": "decomposition.json",
+    "description": "Strength of the seasonal_1008 component"
+  },
+  "strength_seasonal_144": {
+    "value": 0.9585253035914175,
+    "display": "0.959",
+    "unit": "",
+    "source": "decomposition.json",
+    "description": "Strength of the seasonal_144 component"
+  },
+  "strength_trend": {
+    "value": 0.4513970065040256,
+    "display": "0.451",
+    "unit": "",
+    "source": "decomposition.json",
+    "description": "Strength of the trend component"
+  },
+  "top_10pct_share": {
+    "value": 0.48388535420639633,
+    "display": "48.4%",
+    "unit": "%",
+    "source": "distribution_stats.json",
+    "description": "top 10pct share"
+  },
+  "top_1pct_share": {
+    "value": 0.11049206122279948,
+    "display": "11.0%",
+    "unit": "%",
+    "source": "distribution_stats.json",
+    "description": "top 1pct share"
+  },
+  "top_5pct_share": {
+    "value": 0.3361101888957524,
+    "display": "33.6%",
+    "unit": "%",
+    "source": "distribution_stats.json",
+    "description": "top 5pct share"
+  },
+  "top_three_squares": {
+    "value": "5161, 5059, 5259",
+    "display": "5161, 5059, 5259",
+    "unit": "",
+    "source": "selected_areas.json",
+    "description": "Three highest-traffic cells"
+  },
+  "top_traffic_square": {
+    "value": 5161,
+    "display": "5,161",
+    "unit": "",
+    "source": "selected_areas.json",
+    "description": "Highest-traffic cell"
+  },
+  "total_internet": {
+    "value": 5552894187.944575,
+    "display": "5,552,894,187.94",
+    "unit": "activity",
+    "source": "matrix_report.json",
+    "description": "Total internet activity over the period"
+  },
+  "total_raw_rows": {
+    "value": 319896289,
+    "display": "319,896,289",
+    "unit": "rows",
+    "source": "ingest_summary.json",
+    "description": "Records parsed across all days"
+  },
+  "variance_residual": {
+    "value": 0.036024862326870924,
+    "display": "3.6%",
+    "unit": "%",
+    "source": "decomposition.json",
+    "description": "Variance share of the residual component"
+  },
+  "variance_seasonal_1008": {
+    "value": 0.09985091892336867,
+    "display": "10.0%",
+    "unit": "%",
+    "source": "decomposition.json",
+    "description": "Variance share of the seasonal_1008 component"
+  },
+  "variance_seasonal_144": {
+    "value": 0.8293660510523923,
+    "display": "82.9%",
+    "unit": "%",
+    "source": "decomposition.json",
+    "description": "Variance share of the seasonal_144 component"
+  },
+  "variance_trend": {
+    "value": 0.027583929318631194,
+    "display": "2.8%",
+    "unit": "%",
+    "source": "decomposition.json",
+    "description": "Variance share of the trend component"
+  },
+  "weekend_over_weekday_4159": {
+    "value": 0.5870292918762223,
+    "display": "0.587",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "weekend over weekday for square 4159"
+  },
+  "weekend_over_weekday_4556": {
+    "value": 1.140068701808583,
+    "display": "1.140",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "weekend over weekday for square 4556"
+  },
+  "weekend_over_weekday_5059": {
+    "value": 0.861010798555527,
+    "display": "0.861",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "weekend over weekday for square 5059"
+  },
+  "weekend_over_weekday_5161": {
+    "value": 1.3842797738492618,
+    "display": "1.384",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "weekend over weekday for square 5161"
+  },
+  "weekend_over_weekday_5259": {
+    "value": 0.4253782453271431,
+    "display": "0.425",
+    "unit": "",
+    "source": "area_summary.csv",
+    "description": "weekend over weekday for square 5259"
+  }
+}

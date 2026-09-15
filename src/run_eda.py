@@ -39,6 +39,7 @@ from src.eda import (
     select_areas,
     totals_as_grid,
 )
+from src.geo import describe_cell, grid_path
 from src.holidays_it import describe, holiday_flags
 from src.tsanalysis import (
     autocorrelation,
@@ -190,8 +191,13 @@ def _stage_series(data: dict[str, Any], config: Config, areas: Any) -> tuple[np.
 
     rows = area_summary(series, wanted, data["local_times"])
     for row in rows:
-        row["rank"] = areas.ranks[str(row["square_id"])]
-        row["grid_row"], row["grid_col"] = grid_position(row["square_id"])
+        square = row["square_id"]
+        row["rank"] = areas.ranks[str(square)]
+        row["grid_row"], row["grid_col"] = grid_position(square)
+        # Where the cell actually is, so the report can state land use rather
+        # than infer it from the weekday/weekend ratio alone.
+        if grid_path(config).exists():
+            row.update({k: v for k, v in describe_cell(square, config).items() if k != "square_id"})
     _write_csv(rows, config.paths.tables / "area_summary.csv")
     return series, wanted
 
