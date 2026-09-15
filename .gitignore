@@ -1,12 +1,20 @@
 # ---- Data -------------------------------------------------------------
-# Raw CDR text files (~20 GB) and per-day interim parquet are never committed.
-data/raw/
+# Raw CDR text files (~19.4 GiB) and per-day interim blocks are never committed.
+data/raw/*
+!data/raw/grid/
 data/interim/
 # Processed artefacts are large, EXCEPT the extracted series which are the
 # reproducibility path for anyone without the 20 GB download.
+# Small processed artefacts ARE committed: together (~320 KB) they make the
+# exploratory analysis, area selection and modelling reproducible from a clean
+# clone without the 19.4 GiB download. Only the 341 MB matrix is excluded.
 data/processed/*
 !data/processed/.gitkeep
 !data/processed/selected_series.parquet
+!data/processed/totals.parquet
+!data/processed/timestamps.parquet
+!data/processed/square_ids.npy
+!data/processed/matrix_report.json
 
 # ---- Python -----------------------------------------------------------
 .venv/
