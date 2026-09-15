@@ -188,6 +188,55 @@ def test_clean_series_flags_almost_nothing(synthetic: np.ndarray) -> None:
     assert result["fraction_flagged"] < 0.01
 
 
+def test_per_phase_scale_handles_heteroscedastic_errors() -> None:
+    """A global scale is set by the quiet hours and flags every busy one.
+
+    Reproduces the real failure: on square 5161 the seasonal-naive residual's
+    spread varies 25x across the day, and a single global scale flagged 12.7%
+    of all points at z > 4.
+    """
+    rng = np.random.default_rng(7)
+    n = DAILY * 40
+    phase = np.arange(n) % DAILY
+    # Noise amplitude swings 20x between the quiet and busy parts of the cycle.
+    amplitude = 1.0 + 19.0 * (np.sin(2 * np.pi * phase / DAILY) ** 2)
+    series = np.cumsum(np.zeros(n)) + rng.normal(0, 1, n) * amplitude
+
+    globally = seasonal_naive_anomalies(series, seasonal_period=DAILY, per_phase_scale=False)
+    per_phase = seasonal_naive_anomalies(series, seasonal_period=DAILY, per_phase_scale=True)
+
+    assert per_phase["fraction_flagged"] < globally["fraction_flagged"]
+    assert per_phase["fraction_flagged"] < 0.01
+
+
+def test_per_phase_scale_still_finds_a_real_spike() -> None:
+    """Rescaling must not cost sensitivity to a genuine outlier."""
+    rng = np.random.default_rng(8)
+    n = DAILY * 40
+    phase = np.arange(n) % DAILY
+    amplitude = 1.0 + 19.0 * (np.sin(2 * np.pi * phase / DAILY) ** 2)
+    series = rng.normal(0, 1, n) * amplitude
+    # Inject into a quiet phase, where a global scale would hide it least.
+    quiet = int(np.argmin(amplitude[:DAILY]))
+    target = DAILY * 20 + quiet
+    series[target] += 200
+
+    result = seasonal_naive_anomalies(series, seasonal_period=DAILY, per_phase_scale=True)
+    assert target in result["index"].tolist()
+
+
+def test_scale_choice_is_recorded(synthetic: np.ndarray) -> None:
+    """The report must be able to say which scaling produced the numbers."""
+    result = seasonal_naive_anomalies(synthetic, seasonal_period=DAILY)
+    assert result["scale_per_phase"] is True
+    assert result["scale"] > 0
+
+
+def test_series_shorter_than_the_period_is_rejected() -> None:
+    with pytest.raises(ValueError, match="shorter than period"):
+        seasonal_naive_anomalies(np.zeros(10), seasonal_period=DAILY)
+
+
 def test_threshold_controls_sensitivity(synthetic: np.ndarray) -> None:
     loose = seasonal_naive_anomalies(synthetic, seasonal_period=DAILY, z_threshold=2.0)
     strict = seasonal_naive_anomalies(synthetic, seasonal_period=DAILY, z_threshold=6.0)

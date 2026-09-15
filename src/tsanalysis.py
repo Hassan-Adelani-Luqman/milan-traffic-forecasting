@@ -376,11 +376,25 @@ def periodogram_peaks(
     return {"frequencies": frequencies, "power": power, "peaks": peaks}
 
 
+def _robust_scale(values: np.ndarray) -> tuple[float, float]:
+    """Median and MAD-derived scale, falling back to the standard deviation.
+
+    Median and MAD rather than mean and standard deviation, because the
+    anomalies being detected would otherwise inflate the very scale used to
+    detect them.
+    """
+    median = float(np.median(values))
+    mad = float(np.median(np.abs(values - median)))
+    scale = 1.4826 * mad if mad > 0 else float(np.std(values))
+    return median, scale
+
+
 def seasonal_naive_anomalies(
     series: np.ndarray,
     *,
     seasonal_period: int,
     z_threshold: float = 4.0,
+    per_phase_scale: bool = True,
 ) -> dict[str, Any]:
     """Points where a seasonal-naive predictor fails unusually badly.
 
@@ -388,23 +402,52 @@ def seasonal_naive_anomalies(
     identifying them in advance turns the later failure analysis from an
     after-the-fact excuse into a prediction that can be checked.
 
+    Why the scale is estimated per phase
+    ------------------------------------
+    Forecast errors on this data are strongly heteroscedastic: on square 5161
+    the seasonal-naive residual's standard deviation varies 25x between the
+    quietest and busiest hour of the day. A single global scale is therefore set
+    by the quiet hours and flags every busy one -- at ``z > 4`` it marked 12.7%
+    of all points, which identifies nothing.
+
+    Estimating the scale separately for each position in the seasonal cycle asks
+    the question that actually matters: is this point unusual *for this time of
+    day*. With 62 days of history each phase has 62 observations, enough for a
+    stable median and MAD.
+
     Args:
-        series: One area's traffic.
+        series: One area's traffic. Pass a variance-stabilised series (log1p)
+            unless there is a reason not to; the residuals are far closer to
+            homoscedastic.
         seasonal_period: Lag the naive predictor copies from.
         z_threshold: Robust z-score above which a point counts as anomalous.
+        per_phase_scale: Estimate the scale per position in the cycle. Set
+            False only to reproduce the naive global-scale behaviour.
 
     Returns:
-        Indices, residuals and the robust threshold used.
+        Indices into the original series, residuals, z-scores and the scales used.
     """
     values = np.asarray(series, dtype=np.float64)
     residual = values[seasonal_period:] - values[:-seasonal_period]
+    if residual.size == 0:
+        raise ValueError(f"series of {values.size} is shorter than period {seasonal_period}")
 
-    # Median and MAD rather than mean and standard deviation: the anomalies
-    # being detected would otherwise inflate the very scale used to detect them.
-    median = float(np.median(residual))
-    mad = float(np.median(np.abs(residual - median)))
-    scale = 1.4826 * mad if mad > 0 else float(np.std(residual))
-    z_scores = np.abs(residual - median) / scale if scale else np.zeros_like(residual)
+    z_scores = np.zeros_like(residual)
+    scales = np.zeros_like(residual)
+
+    if per_phase_scale:
+        phase = (np.arange(residual.size) + seasonal_period) % seasonal_period
+        for position in range(seasonal_period):
+            mask = phase == position
+            if not mask.any():
+                continue
+            median, scale = _robust_scale(residual[mask])
+            scales[mask] = scale
+            z_scores[mask] = np.abs(residual[mask] - median) / scale if scale else 0.0
+    else:
+        median, scale = _robust_scale(residual)
+        scales[:] = scale
+        z_scores = np.abs(residual - median) / scale if scale else z_scores
 
     flagged = np.flatnonzero(z_scores > z_threshold)
     return {
@@ -412,7 +455,8 @@ def seasonal_naive_anomalies(
         "residual": residual,
         "z_scores": z_scores,
         "threshold": float(z_threshold),
-        "scale": float(scale),
+        "scale": float(np.median(scales)),
+        "scale_per_phase": per_phase_scale,
         "n_flagged": int(flagged.size),
-        "fraction_flagged": float(flagged.size / residual.size) if residual.size else 0.0,
+        "fraction_flagged": float(flagged.size / residual.size),
     }

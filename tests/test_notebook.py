@@ -23,6 +23,12 @@ from src.config import PROJECT_ROOT
 NOTEBOOK = PROJECT_ROOT / "notebooks" / "00_kaggle_ingest.ipynb"
 GENERATOR = PROJECT_ROOT / "notebooks" / "build_kaggle_notebook.py"
 
+# Every generated notebook, paired with the script that produces it.
+GENERATED = {
+    "00_kaggle_ingest.ipynb": "build_kaggle_notebook.py",
+    "02_eda.ipynb": "build_eda_notebook.py",
+}
+
 
 @pytest.fixture(scope="module")
 def notebook() -> dict:
@@ -32,6 +38,76 @@ def notebook() -> dict:
 @pytest.fixture(scope="module")
 def code_cells(notebook: dict) -> list[str]:
     return ["".join(c["source"]) for c in notebook["cells"] if c["cell_type"] == "code"]
+
+
+def _cells(name: str) -> list[dict]:
+    return json.loads((PROJECT_ROOT / "notebooks" / name).read_text(encoding="utf-8"))["cells"]
+
+
+def _code(name: str) -> list[str]:
+    return ["".join(c["source"]) for c in _cells(name) if c["cell_type"] == "code"]
+
+
+@pytest.mark.parametrize("name", sorted(GENERATED))
+def test_generated_notebook_is_well_formed(name: str) -> None:
+    """Structure checks applied to every generated notebook."""
+    payload = json.loads((PROJECT_ROOT / "notebooks" / name).read_text(encoding="utf-8"))
+    assert payload["nbformat"] == 4
+    assert payload["nbformat_minor"] >= 5
+    assert [i for i, c in enumerate(payload["cells"]) if not c.get("id")] == []
+
+
+@pytest.mark.parametrize("name", sorted(GENERATED))
+def test_generated_notebook_code_parses(name: str) -> None:
+    for index, source in enumerate(_code(name)):
+        try:
+            ast.parse(source)
+        except SyntaxError as exc:  # pragma: no cover - failure path
+            pytest.fail(f"{name} code cell {index} does not parse: {exc}")
+
+
+@pytest.mark.parametrize("name", sorted(GENERATED))
+def test_generated_notebook_imports_resolve(name: str) -> None:
+    """A rename in src/ must break here, not mid-session."""
+    symbols: set[tuple[str, str]] = set()
+    for source in _code(name):
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("src."):
+                symbols.update((node.module, alias.name) for alias in node.names)
+
+    assert symbols, f"{name} imports nothing from src/"
+    missing = [
+        f"{module}.{symbol}"
+        for module, symbol in sorted(symbols)
+        if not hasattr(importlib.import_module(module), symbol)
+    ]
+    assert missing == [], f"{name} imports names that no longer exist: {missing}"
+
+
+@pytest.mark.parametrize("name", sorted(GENERATED))
+def test_generated_notebook_holds_no_logic(name: str) -> None:
+    """Notebooks orchestrate and render; logic belongs in src/ where it is tested."""
+    offenders = [
+        f"cell {index}: {node.name}"
+        for index, source in enumerate(_code(name))
+        for node in ast.parse(source).body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    ]
+    assert offenders == [], f"{name} defines {offenders}"
+
+
+@pytest.mark.parametrize("name", sorted(GENERATED))
+def test_generated_notebook_imports_no_private_names(name: str) -> None:
+    """A notebook reaching for an underscored name means the API is wrong."""
+    private = [
+        f"{node.module}.{alias.name}"
+        for source in _code(name)
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("src.")
+        for alias in node.names
+        if alias.name.startswith("_")
+    ]
+    assert private == [], f"{name} imports private names: {private}"
 
 
 def test_notebook_exists() -> None:

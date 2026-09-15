@@ -51,7 +51,7 @@ TASKS: tuple[Task, ...] = (
     ),
     Task("benchmark", "src.memory_report", "Benchmark ingest strategies in isolated processes"),
     Task("matrix", "src.build_matrix", "Assemble the 8928 x 10000 matrix and per-square totals"),
-    Task("eda", "src.eda", "Produce exploratory figures, statistics and the selected series"),
+    Task("eda", "src.run_eda", "Produce exploratory figures, statistics and the selected series"),
     Task("train", "src.train", "Train and tune the three models"),
     Task("evaluate", "src.evaluate", "Evaluate on the test week; write metrics and diagnostics"),
     Task("report", "src.export_report", "Export figures and tables into report/"),
