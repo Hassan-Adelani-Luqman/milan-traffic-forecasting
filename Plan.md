@@ -13,7 +13,8 @@
 | 1 — Download | ✅ complete | `6134e20`, `c8020ba`, `8e97e62` |
 | 2 — Ingest and memory evidence | ✅ complete | `8935f90`, `bb8a2e1`, `b5dd29b`, `1a83913` |
 | 3 — Exploratory analysis | ✅ complete | `f64da2d`, `8cc9bd1`, `9e780f3` |
-| 4 — Forecasting framework | ⬜ next | |
+| **3b — Related work and model selection** | ⬜ **next** — gap found after the plan was written | |
+| 4 — Forecasting framework | ⬜ | |
 | 5 — Models and experimentation | ⬜ | |
 | 6 — Evaluation and failure analysis | ⬜ | |
 | 7 — Reproducibility and repo polish | ⬜ | |
@@ -312,6 +313,95 @@ in any split** (minima 47–172).
 
 ---
 
+## Phase 3b — Related work and model selection ⬜
+
+**Added after the plan was written.** The original plan moved from exploratory analysis
+straight to implementing three pre-chosen models, and never allocated a phase to the
+review that is supposed to justify them. The brief's Section 3 requires one, the report
+has a Related Work section that depends on it, and the 14-point methodology criterion
+asks for model choices grounded in "relevant findings from previous research".
+
+The current line-up — dynamic harmonic regression, LSTM, LightGBM — was chosen for
+architectural diversity: one statistical, one recurrent-neural, one gradient-boosted.
+That is a defensible reason but not a researched one, and it was settled before any
+literature had been read.
+
+**Goal:** a focused review that either justifies the line-up or changes it, with the
+reasoning visible either way.
+
+### 3b.1 Scope the review
+
+Cover, at a level proportionate to a coursework report rather than a survey paper:
+
+- **This dataset specifically.** The Telecom Italia Big Data Challenge data has its own
+  literature. Start from Barlacchi *et al.* (2015), the data descriptor already cited in
+  the brief, and work forward through papers that forecast on the same Milan grid. Where
+  a published result uses the same squares or the same week, note it — it is the closest
+  thing to a comparable baseline this study has.
+- **Statistical approaches.** ARIMA/SARIMA and why a single seasonal period fails here;
+  dynamic harmonic regression and Fourier terms for multiple seasonalities; exponential
+  smoothing variants (TBATS) for the same problem.
+- **Deep learning.** LSTM and GRU for cellular traffic; CNN-LSTM and ConvLSTM where the
+  spatial grid is exploited; attention and transformer models, and the evidence on
+  whether they beat simpler baselines at short horizons.
+- **Tree ensembles.** Gradient boosting on lag features for time series, and the
+  recurring finding in forecasting competitions that well-featurised boosted trees are
+  hard to beat.
+- **Evaluation practice.** Why MASE exists and when scale-free metrics are necessary;
+  the standard warning that a one-step-ahead neural model can collapse to persistence.
+
+### 3b.2 Connect the review to the measured evidence
+
+Every model justification must cite both a source and a Phase 3 measurement. The
+exploratory findings that bear on model choice are already established:
+
+| Measurement | What it constrains |
+|---|---|
+| Daily 82.9% and weekly 10.0% of variance, both present | A model must represent two seasonal periods at once |
+| 12.00 h harmonic in the periodogram | The daily cycle is not one sinusoid; K₁ ≥ 2 Fourier terms |
+| s = 144 at 10-minute resolution | Seasonal ARIMA is computationally intractable |
+| ADF and KPSS agree on stationarity | d = 0; no differencing for a stochastic trend |
+| Lag-1 ACF 0.987 | Persistence is a demanding baseline and a collapse risk |
+| ACF peaks at 144, 288, 432, 720, 864, 1008 | The lag set for a feature-based model |
+| mean–std correlation 0.947 → 0.265 under log1p | A variance-stabilising transform is warranted |
+| Areas differ 5× in volume, 6× in peak-to-trough | Cross-area comparison needs a scale-free metric |
+
+### 3b.3 Write the justification
+
+For each of the three models: what it is, why it suits *these* characteristics, what the
+literature reports about it on this or similar problems, and — the part most often
+skipped — **its limitations and what could go wrong here**. The brief asks explicitly for
+"your understanding/criticism of the model's strengths and limitations".
+
+### 3b.4 Revisit the line-up, honestly
+
+If the review points somewhere else, say so rather than back-fitting a justification to a
+decision already made. `CLAUDE.md` requires stopping and asking before changing the model
+line-up, so any change is the author's call, not an automatic one. Candidates the review
+might raise: TBATS in place of harmonic regression; a GRU rather than an LSTM at this
+sequence length; a ConvLSTM exploiting neighbouring cells, which the univariate decision
+in Appendix B currently rules out.
+
+**Deliverables**
+- `report/RELATED_WORK.md` — the review and the three justifications.
+- `report/references.md` — IEEE-style reference list, also carrying the GitHub repository
+  and demo video links the brief requires in References.
+- Any revision to the model line-up recorded in Appendix B with its reason.
+
+**Acceptance:** each of the three models has a justification citing at least one source
+and at least one Phase 3 measurement; every claim about a model's behaviour on this data
+traces to a number in `report/RESULTS_SUMMARY.md`; references are IEEE-formatted and
+complete.
+
+**Note on sequencing:** this phase should complete before Phase 5 locks in the
+implementations, but Phase 4 (the framework, baselines and metrics) is model-agnostic and
+can proceed in parallel if that is convenient.
+
+> **CHECKPOINT 3b** — the three justifications, the reference list, and an explicit
+> statement of whether the line-up survived the review unchanged.
+
+---
+
 ## Phase 4 — Forecasting framework ⬜
 
 **Goal:** the harness, the baselines, and a correct evaluation protocol — before any real model.
@@ -522,3 +612,30 @@ report prose.
   memory benchmark. Keeping one file preserves that ability.
 - **2 December** remains unexplained — 17 flagged intervals, the worst single day, not a
   holiday. Worth a sentence in the failure analysis either way.
+
+---
+
+## Appendix D — Report sections, and what each depends on
+
+The brief's four numbered sections do not map one-to-one onto the report's structure.
+This is the mapping, with what blocks each.
+
+| Report section | Brief section | Depends on | State |
+|---|---|---|---|
+| Introduction | — | nothing | writable |
+| Related Work | §3 | Phase 3b | **blocked — review not done** |
+| Dataset and Data Preparation | §1 | Phase 2 ✅ | writable |
+| Exploratory Analysis | §2 | Phase 3 ✅ | writable |
+| Methodology | §3, §4 | Phases 3b, 4, 5 | blocked |
+| Results and Discussion | §4 | Phases 5, 6 | blocked |
+| Conclusion and Future Work | — | all of the above | blocked |
+| References | — | Phase 3b | blocked |
+
+Also required by the brief and not produced by any phase:
+
+- **AI-use disclosure.** "Any significant use of AI should be disclosed in your report."
+- **Repository and demo video links**, in References.
+- **A 7–10 minute video presentation**, which must cover the problem, the data handling,
+  the model choices and the findings, plus at least one technical decision and one
+  limitation or failure case. `report/RESULTS_SUMMARY.md` and the failure analysis from
+  Phase 6 are the material for it.
