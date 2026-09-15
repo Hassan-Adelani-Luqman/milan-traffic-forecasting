@@ -387,8 +387,10 @@ def _section_exploratory(tables: Path) -> list[str]:
         lines += [
             "### Seasonal-naive anomalies (source: `anomalies.csv`)",
             "",
-            f"- Flagged: **{len(rows)}** intervals of 8,928 (**{len(rows) / 8928:.2%}**) "
-            "at z > 4, scale estimated per position in the daily cycle",
+            f"- Flagged: **{len(rows)}** intervals, **{len(rows) / (8928 - 144):.2%}** of the "
+            "8,784 that can be evaluated (the first day has no seasonal-naive "
+            "comparison), at z > 4 with the scale estimated per position in the "
+            "daily cycle",
             f"- On holidays: **{on_holiday}/{len(rows)}** "
             f"(**{on_holiday / len(rows):.1%}**), against 12.9% of days being holidays "
             "= **1.78x** enrichment, binomial p = 4.3e-04",

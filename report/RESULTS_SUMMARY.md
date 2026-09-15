@@ -127,7 +127,7 @@ Regenerate with `python -m src.export_report`.
 
 ### Seasonal-naive anomalies (source: `anomalies.csv`)
 
-- Flagged: **152** intervals of 8,928 (**1.70%**) at z > 4, scale estimated per position in the daily cycle
+- Flagged: **152** intervals, **1.73%** of the 8,784 that can be evaluated (the first day has no seasonal-naive comparison), at z > 4 with the scale estimated per position in the daily cycle
 - On holidays: **35/152** (**23.0%**), against 12.9% of days being holidays = **1.78x** enrichment, binomial p = 4.3e-04
 
 Days with the most flagged intervals:
