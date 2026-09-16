@@ -562,7 +562,38 @@ Training wall time, 3 repeats, mean ± std, including early stopping. Inference:
 seconds for 1,008 one-step forecasts, and per-step ms. Parameter count and peak memory.
 Write `results/tables/timing.csv`, stating whether figures are from one area or averaged.
 
-**Runs on Kaggle** (GPU). Needs the published dataset slug.
+**Runs on Kaggle** (GPU). No dataset slug needed after all: tuning reads only the
+committed `selected_series.parquet` and `selected_areas.json`, so a clean clone is the
+entire input.
+
+### Deviations from this plan, with the evidence
+
+**The work is split by device, not run wholesale on Kaggle.** The LSTM sweep was first
+run locally and abandoned after 16 h with 2 of 5 stages done — `sequence_length` (4
+candidates, 36 min) and `capacity` (6 candidates, **15 h**). The winning capacity fit
+alone took 13.8 h and the process averaged **0.88 of 8 cores** throughout. A 288-step
+recurrence is latency-bound on a sequential dependency that CPU threads cannot split, so
+more cores would not have helped. Projected to completion: ~6 days. The LSTM therefore
+moved to Kaggle GPU (`notebooks/01_kaggle_lstm.ipynb`); harmonic ARIMA and LightGBM stay
+local, where together they take under ten minutes.
+
+Three consequences, each handled rather than absorbed:
+
+1. `LSTMForecaster` had **no device support at all** — CPU-only by construction. Added,
+   with `resolve_device`, CUDA synchronisation before the training clock is read, and
+   tests asserting placement and that predictions cross back to NumPy.
+2. `train_wall_s` is **no longer comparable across models**, so every results and timing
+   table carries a `device` column. The LSTM's measured CPU cost is reported as a
+   finding — it is a real answer to requirement IV, not a limitation to apologise for.
+3. `train.py` gained `--models` and now **merges** into `selected_hyperparameters.json`
+   instead of overwriting it, so a run on one machine cannot discard another's
+   selections. It refuses to mix selections tuned on different areas.
+
+**The LSTM sweep logged only stage winners, not candidates.** Harmonic logged all 6
+candidates and LightGBM all 30 Optuna trials, but the LSTM logged 5 rows for 22 fits —
+so the rejected candidates existed only in console output, which was lost when the
+runaway job was killed. Fixed: every candidate now appends its own row. This is why the
+16 h of aborted work is not recoverable and the sweep restarts from scratch.
 
 > **CHECKPOINT 5** — experiment log summary, chosen hyperparameters with the reasoning
 > chain, validation metrics vs. baselines.

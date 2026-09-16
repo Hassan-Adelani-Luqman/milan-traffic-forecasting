@@ -27,7 +27,17 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 # Ordered so `all` runs the pipeline end to end.
-PIPELINE = ("env", "download", "ingest", "matrix", "eda", "train", "evaluate", "report")
+PIPELINE = (
+    "env",
+    "download",
+    "ingest",
+    "matrix",
+    "eda",
+    "train",
+    "final",
+    "evaluate",
+    "report",
+)
 
 
 @dataclass(frozen=True)
@@ -53,6 +63,7 @@ TASKS: tuple[Task, ...] = (
     Task("matrix", "src.build_matrix", "Assemble the 8928 x 10000 matrix and per-square totals"),
     Task("eda", "src.run_eda", "Produce exploratory figures, statistics and the selected series"),
     Task("train", "src.train", "Train and tune the three models"),
+    Task("final", "src.final_runs", "Refit on train+validation and evaluate on the test week"),
     Task("evaluate", "src.evaluate", "Evaluate on the test week; write metrics and diagnostics"),
     Task("facts", "src.facts", "Regenerate the named fact registry from the artefacts"),
     Task("report", "src.export_report", "Export figures and tables into report/"),

@@ -146,7 +146,25 @@ def test_table_orders_by_mase() -> None:
     assert rendered.index("better") < rendered.index("worse")
 
 
-def test_evaluate_all_writes_a_table_per_area(config, splits) -> None:
+def test_evaluate_all_writes_a_table_per_area(config, splits, tmp_path) -> None:
+    """Writes are redirected: the suite must not rewrite committed artefacts.
+
+    Run against the real config this rewrote the tracked metrics tables, so
+    running the tests dirtied the working tree and a reported table could be
+    silently replaced by one a test produced.
+    """
+    import dataclasses
+    import shutil
+
+    staged = tmp_path / "results"
+    (staged / "tables").mkdir(parents=True)
+    shutil.copy2(
+        config.paths.tables / "selected_areas.json", staged / "tables" / "selected_areas.json"
+    )
+    config = dataclasses.replace(
+        config, paths=dataclasses.replace(config.paths, results=staged)
+    )
+
     results = evaluate_all(config, split_name="test")
     assert len(results) == 3
 

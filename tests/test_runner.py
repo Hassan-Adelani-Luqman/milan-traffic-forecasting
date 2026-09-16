@@ -57,7 +57,9 @@ def test_every_pipeline_stage_has_a_task(runner) -> None:
 
 # Modules a later phase will add. Listed rather than skipped, so the set shrinks
 # as phases land and cannot quietly hide a module that was deleted by accident.
-PENDING_MODULES = {"src.train"}
+# src.train left this set when Phase 5 landed, which is what the companion test
+# below enforces.
+PENDING_MODULES: set[str] = set()
 
 
 def test_task_modules_are_importable(runner) -> None:

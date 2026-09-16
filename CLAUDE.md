@@ -6,8 +6,25 @@ one step ahead (10 min), evaluated on 16-22 Dec 2013 across three areas.
 ## Where things run
 
 Hybrid. `src/`, `config/` and `tests/` are developed and version-controlled locally;
-ingest, EDA and model training run on Kaggle via thin notebooks that `git clone` this
+ingest, EDA and the LSTM sweep run on Kaggle via thin notebooks that `git clone` this
 repo and import from `src/`. Notebooks never define model or preprocessing logic.
+
+Split by what the work needs, measured rather than assumed:
+
+- **Local CPU** — harmonic ARIMA and LightGBM tuning, the final fits, evaluation.
+  Both searches finish in minutes.
+- **Kaggle GPU** — the LSTM sweep only (`notebooks/01_kaggle_lstm.ipynb`). A
+  288-step recurrence is latency-bound on a sequential dependency that CPU threads
+  cannot split: locally it held 0.88 of 8 cores and one fit at
+  `hidden_size=128, num_layers=2` took 13.8 h, projecting to ~6 days for the sweep.
+
+Consequence for reporting: `train_wall_s` is **not comparable across models**, so
+every results and timing table carries a `device` column. The LSTM's CPU cost is a
+finding to report, not an embarrassment to hide.
+
+`python run.py train --models <names>` tunes a subset and merges into
+`results/tables/selected_hyperparameters.json`, so a run on one machine never
+discards another's selections. The experiment log is append-only across both.
 
 Kaggle disk budget: `/kaggle/working` is ~20 GB and persisted; everything else is
 ~60 GB of scratch that vanishes at session end. The 20 GB of raw text therefore goes

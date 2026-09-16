@@ -26,6 +26,7 @@ GENERATOR = PROJECT_ROOT / "notebooks" / "build_kaggle_notebook.py"
 # Every generated notebook, paired with the script that produces it.
 GENERATED = {
     "00_kaggle_ingest.ipynb": "build_kaggle_notebook.py",
+    "01_kaggle_lstm.ipynb": "build_lstm_notebook.py",
     "02_eda.ipynb": "build_eda_notebook.py",
 }
 
