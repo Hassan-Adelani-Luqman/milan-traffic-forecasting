@@ -79,7 +79,14 @@ models.
 
 ### What to bring back
 
-`results/tables/` (the metric and timing tables) and `results/predictions/`.
+`results/tables/` (the metric and timing tables), `results/predictions/`, and
+**`results/environment.json`**.
+
+That last one is easy to skip and must not be. The timing table records
+`device` as `cpu` or `cuda`, but not *which* CPU or GPU, and the local
+`environment.json` describes a Windows laptop with no CUDA device at all. Left
+behind, the repository ends up attributing GPU timings to a machine that
+cannot produce them.
 """
     ),
     md("## 1. Settings"),
@@ -286,10 +293,14 @@ every figure from these, so nothing further needs to be re-run to produce them.
 written = sorted(config.paths.tables.glob("final_metrics_*.csv"))
 written += sorted(config.paths.tables.glob("timing_*.csv"))
 written += sorted(config.paths.predictions.glob("*.parquet"))
+# The hardware record belongs with the timings it explains, not beside them.
+written += [config.paths.environment_json]
 
 for path in written:
     print(f"{path.stat().st_size:>10,}  {path.relative_to(config.paths.results.parent)}")
 print(f"\\n{len(written)} files to download from the committed version's Output tab.")
+print("environment.json is the one most easily missed: without it the cuda rows")
+print("in timing_*.csv have no machine attached to them.")
 """
     ),
 ]
