@@ -47,6 +47,17 @@ MODELS = ("persistence", "seasonal_naive", "harmonic_arima", "lightgbm", "lstm",
 PLOTTED = ("harmonic_arima", "lightgbm", "lstm")
 
 
+def _relative(path: Path) -> str:
+    """A project-relative POSIX path, for artefacts that get committed."""
+    from src.config import PROJECT_ROOT
+
+    try:
+        return Path(path).resolve().relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        # Outside the project (a Kaggle session, or a redirected test run).
+        return Path(path).as_posix()
+
+
 def _save(fig: Any, path: Path) -> Path:
     """Write a figure and close it."""
     import matplotlib.pyplot as plt
@@ -241,8 +252,11 @@ def run_results(config: Config, *, split_name: str = "test") -> dict[str, Any]:
     summary = {
         "split": split_name,
         "areas": list(areas.forecast),
-        "figures": [str(p) for p in figures],
-        "tables": [str(p) for p in tables],
+        # Relative to the project root, and with forward slashes: an absolute
+        # path here bakes one machine's directory layout into a committed
+        # artefact, so the file could never match on any other machine.
+        "figures": [_relative(p) for p in figures],
+        "tables": [_relative(p) for p in tables],
         "copying_verdicts": {r["model"]: r["verdict"] for r in copying_rows},
     }
     path = config.paths.tables / f"results_summary_{split_name}.json"
