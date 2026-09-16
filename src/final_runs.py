@@ -59,6 +59,7 @@ class FinalResult:
     n_params: int = 0
     lag1_copy_ratio: float = float("nan")
     device: str = "cpu"
+    n_members: int = 0
     extra: dict[str, Any] = field(default_factory=dict)
 
     def _spread(self, attribute: str) -> tuple[float, float]:
@@ -80,7 +81,9 @@ class FinalResult:
             "square_id": self.square_id,
             "model": self.model,
             "split": self.split,
-            "n_seeds": len(self.metrics),
+            # An ensemble row scores one averaged series but was built from
+            # several fits, and the count is what makes the row readable.
+            "n_seeds": self.n_members or len(self.metrics),
             "mae": round(mae, 4),
             "mae_std": round(mae_std, 4),
             "rmse": round(rmse, 4),
@@ -189,6 +192,109 @@ def _lag1_copy_ratio(predictions: np.ndarray, series: np.ndarray, start: int, st
 
 
 MODEL_ORDER = ("harmonic_arima", "lstm", "lightgbm")
+
+
+ENSEMBLE_SUFFIX = "_ensemble"
+
+
+def build_ensemble(
+    member: FinalResult,
+    mean_predictions: np.ndarray,
+    splits: SplitSet,
+    split: Any,
+    config: Config,
+) -> FinalResult:
+    """Score the seed-averaged forecast as a model in its own right.
+
+    The distinction this resolves is easy to miss and easy to misreport. The
+    ``lstm`` row averages the error of three fits; this row is the error of
+    their averaged forecast. Averaging predictions cannot increase absolute
+    error and generally reduces it, so the two differ systematically -- the
+    saved prediction series is *better* than the row describing the model that
+    produced it. Plotting one beside the other without saying so would show a
+    figure that quietly outperforms its own table.
+
+    Costs are summed rather than averaged: an ensemble forecast requires every
+    member to be fitted and every member to be run, so it is three fits of
+    training and three passes of inference.
+    """
+    metrics = evaluate(
+        split.values,
+        mean_predictions,
+        y_train=splits.train.values,
+        seasonal_period=config.evaluation.seasonal_period,
+        mape_threshold=config.evaluation.mape_zero_threshold,
+    )
+    # A member reconstructed from a written table has counts but no per-seed
+    # Metrics objects, so the count is taken from whichever is populated.
+    n_members = max(len(member.metrics), member.n_members, 1)
+    return FinalResult(
+        square_id=member.square_id,
+        model=f"{member.model}{ENSEMBLE_SUFFIX}",
+        split=member.split,
+        metrics=[metrics],
+        predictions=[np.asarray(mean_predictions)],
+        train_wall_s=[sum(member.train_wall_s)],
+        inference_wall_s=[sum(member.inference_wall_s)],
+        n_params=member.n_params * n_members,
+        lag1_copy_ratio=_lag1_copy_ratio(mean_predictions, splits.series, split.start, split.stop),
+        device=member.device,
+        n_members=n_members,
+        extra={"members": member.model, "n_members": n_members},
+    )
+
+
+def rebuild_ensemble_rows(
+    config: Config, split_name: str, *, model: str = "lstm"
+) -> list[FinalResult]:
+    """Recompute ensemble rows from saved predictions, without refitting.
+
+    The seed-averaged series is already persisted, and metrics are a pure
+    function of it, so the row can be recovered exactly without another GPU
+    session. Timing and parameter counts come from the member row that is
+    already in the table.
+    """
+    import polars as pl
+
+    areas = SelectedAreas.load(config.paths.tables / "selected_areas.json")
+    rebuilt: list[FinalResult] = []
+
+    for square_id in areas.forecast:
+        predictions_path = config.paths.predictions / f"{split_name}_area_{square_id}.parquet"
+        table_path = config.paths.tables / f"final_metrics_area_{square_id}_{split_name}.csv"
+        if not predictions_path.exists() or not table_path.exists():
+            continue
+
+        frame = pl.read_parquet(predictions_path)
+        if model not in frame.columns:
+            continue
+
+        with table_path.open(encoding="utf-8", newline="") as fh:
+            rows = list(csv.DictReader(fh))
+        member_row = next((r for r in rows if r["model"] == model), None)
+        if member_row is None or int(member_row["n_seeds"]) < 2:
+            continue
+
+        n_members = int(member_row["n_seeds"])
+        values, times = load_area_series(config, square_id)
+        splits = make_splits(values, times, config)
+        split = splits[split_name]
+
+        member = FinalResult(
+            square_id=square_id,
+            model=model,
+            split=split_name,
+            # The member row already records one model's parameters.
+            n_params=int(member_row["n_params"]),
+            device=member_row.get("device", "cpu"),
+            n_members=n_members,
+            # The table stores means; the ensemble's cost is the total.
+            train_wall_s=[float(member_row["train_wall_s"])] * n_members,
+            inference_wall_s=[float(member_row["inference_wall_s"])] * n_members,
+        )
+        rebuilt.append(build_ensemble(member, frame[model].to_numpy(), splits, split, config))
+
+    return rebuilt
 
 
 def run_final(
@@ -304,6 +410,19 @@ def run_final(
                 f"({row['train_wall_s']:.0f}s train)"
             )
 
+            # The saved prediction series is the seed mean, so it needs a row
+            # of its own or the plots have no table entry that matches them.
+            if len(result.metrics) > 1:
+                ensemble = build_ensemble(result, result.mean_predictions, splits, split, config)
+                results.append(ensemble)
+                erow = ensemble.to_row()
+                print(
+                    f"  {ensemble.model:<16} MAE {erow['mae']:>8.2f}        "
+                    f"MASE {erow['mase']:.3f}  R2 {erow['r2']:.4f}  "
+                    f"copy {erow['lag1_copy_ratio']:.2f}  "
+                    f"({erow['n_seeds']} members)"
+                )
+
         _save_predictions(results, splits, split, config, square_id, split_name)
 
     _write_tables(results, config, split_name)
@@ -337,8 +456,12 @@ def _save_predictions(
 
 def _write_tables(results: list[FinalResult], config: Config, split_name: str) -> list[Path]:
     """Write per-area metric tables and a combined one."""
+    return _write_rows([r.to_row() for r in results], config, split_name)
+
+
+def _write_rows(rows: list[dict[str, Any]], config: Config, split_name: str) -> list[Path]:
+    """Write the metric and timing tables from already-assembled rows."""
     written: list[Path] = []
-    rows = [r.to_row() for r in results]
 
     by_area: dict[int, list[dict[str, Any]]] = {}
     for row in rows:
@@ -394,6 +517,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Split to report on. Reported results use the test week.",
     )
     parser.add_argument(
+        "--rebuild-ensemble",
+        action="store_true",
+        help=(
+            "Recompute the seed-ensemble rows from saved predictions and rewrite "
+            "the tables, without refitting anything. Use after a run whose "
+            "predictions exist but whose tables predate the ensemble row."
+        ),
+    )
+    parser.add_argument(
         "--models",
         default=",".join(MODEL_ORDER),
         help=(
@@ -409,6 +541,28 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     config = load_config(args.config)
     config.paths.mkdirs()
+    if args.rebuild_ensemble:
+        rebuilt = rebuild_ensemble_rows(config, args.split)
+        if not rebuilt:
+            print(f"no ensemble rows to rebuild for the {args.split} split")
+            return 0
+
+        path = config.paths.tables / f"final_metrics_all_{args.split}.csv"
+        with path.open(encoding="utf-8", newline="") as fh:
+            existing = [r for r in csv.DictReader(fh) if not r["model"].endswith(ENSEMBLE_SUFFIX)]
+
+        rows = existing + [r.to_row() for r in rebuilt]
+        _write_rows(rows, config, args.split)
+        for result in rebuilt:
+            row = result.to_row()
+            print(
+                f"  area {row['square_id']}  {row['model']:<16} "
+                f"MAE {row['mae']:>8.2f}  MASE {row['mase']:.3f}  "
+                f"R2 {row['r2']:.4f}  ({row['n_seeds']} members)"
+            )
+        print(f"\nrewrote tables in {config.paths.tables}")
+        return 0
+
     models = tuple(name.strip() for name in args.models.split(",") if name.strip())
     unknown = set(models) - set(MODEL_ORDER)
     if unknown:

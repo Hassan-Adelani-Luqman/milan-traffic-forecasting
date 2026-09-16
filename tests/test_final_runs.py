@@ -260,3 +260,116 @@ def test_device_defaults_to_cpu_for_models_that_never_report_one() -> None:
     result.inference_wall_s = [0.001]
 
     assert result.to_row()["device"] == "cpu"
+
+
+# --------------------------------------------------------------------------
+# The seed ensemble
+# --------------------------------------------------------------------------
+
+
+def _member(predictions: list[np.ndarray], **kwargs) -> FinalResult:
+    result = FinalResult(square_id=5161, model="lstm", split="test", **kwargs)
+    result.predictions = predictions
+    result.metrics = [_metrics(100.0 + i, 0.3) for i in range(len(predictions))]
+    result.train_wall_s = [10.0] * len(predictions)
+    result.inference_wall_s = [2.0] * len(predictions)
+    result.n_params = 1000
+    return result
+
+
+def test_ensemble_row_is_named_for_its_members() -> None:
+    from src.final_runs import ENSEMBLE_SUFFIX
+
+    assert ENSEMBLE_SUFFIX == "_ensemble"
+
+
+def test_ensemble_cost_is_summed_not_averaged() -> None:
+    """An ensemble forecast needs every member fitted and every member run."""
+    from src.final_runs import build_ensemble
+    from src.splits import make_splits
+
+    from src.config import load_config
+    from src.evaluate import load_area_series
+
+    config = load_config(auto_env=False)
+    if not (config.paths.processed / "selected_series.parquet").exists():
+        pytest.skip("selected_series.parquet not present")
+
+    values, times = load_area_series(config, 5161)
+    splits = make_splits(values, times, config)
+    split = splits["test"]
+
+    rng = np.random.default_rng(0)
+    members = [split.values + rng.normal(0, 5, split.values.size) for _ in range(3)]
+    member = _member(members)
+
+    ensemble = build_ensemble(member, member.mean_predictions, splits, split, config)
+    row = ensemble.to_row()
+
+    assert ensemble.model == "lstm_ensemble"
+    assert row["n_seeds"] == 3
+    assert row["train_wall_s"] == pytest.approx(30.0)  # 3 x 10, not the mean
+    assert row["inference_wall_s"] == pytest.approx(6.0)  # 3 x 2
+    assert row["n_params"] == 3000  # three models are kept
+
+
+def test_averaging_predictions_cannot_increase_error() -> None:
+    """The property that makes the ensemble row necessary.
+
+    The member row averages three errors; the ensemble row is the error of the
+    averaged forecast. Jensen's inequality makes the second no larger, so the
+    saved prediction series always looks at least as good as the model row
+    beside it. That gap is why both rows must exist.
+    """
+    from src.final_runs import build_ensemble
+    from src.splits import make_splits
+
+    from src.config import load_config
+    from src.evaluate import load_area_series
+
+    config = load_config(auto_env=False)
+    if not (config.paths.processed / "selected_series.parquet").exists():
+        pytest.skip("selected_series.parquet not present")
+
+    values, times = load_area_series(config, 5161)
+    splits = make_splits(values, times, config)
+    split = splits["test"]
+
+    rng = np.random.default_rng(1)
+    members = [split.values + rng.normal(0, 20, split.values.size) for _ in range(3)]
+    mean_of_member_errors = float(np.mean([np.mean(np.abs(m - split.values)) for m in members]))
+
+    member = _member(members)
+    ensemble = build_ensemble(member, member.mean_predictions, splits, split, config)
+
+    assert ensemble.metrics[0].mae <= mean_of_member_errors + 1e-9
+
+
+def test_committed_tables_carry_an_ensemble_row_matching_the_predictions() -> None:
+    """The figure and the table must describe the same series."""
+    import csv as _csv
+
+    import polars as pl
+
+    from src.config import PROJECT_ROOT
+
+    tables = PROJECT_ROOT / "results" / "tables"
+    predictions = PROJECT_ROOT / "results" / "predictions"
+    path = tables / "final_metrics_area_5161_test.csv"
+    parquet = predictions / "test_area_5161.parquet"
+    if not path.exists() or not parquet.exists():
+        pytest.skip("final tables or predictions not present")
+
+    with path.open(encoding="utf-8", newline="") as fh:
+        rows = {r["model"]: r for r in _csv.DictReader(fh)}
+    if "lstm" not in rows or int(rows["lstm"]["n_seeds"]) < 2:
+        pytest.skip("no multi-seed model in this table")
+
+    assert "lstm_ensemble" in rows, (
+        "predictions hold the seed-averaged LSTM series but no lstm_ensemble row "
+        "describes it. Run `python -m src.final_runs --rebuild-ensemble`."
+    )
+
+    frame = pl.read_parquet(parquet)
+    recomputed = float((frame["observed"] - frame["lstm"]).abs().mean())
+    assert recomputed == pytest.approx(float(rows["lstm_ensemble"]["mae"]), abs=0.01)

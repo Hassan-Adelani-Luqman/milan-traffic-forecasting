@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-09-16T16:26:11+0200",
+  "recorded_at": "2026-09-16T16:42:19+0200",
   "platform": {
     "system": "Windows",
     "release": "11",
@@ -20,7 +20,7 @@
   },
   "memory": {
     "total_bytes": 34122072064,
-    "available_bytes_at_capture": 7699206144
+    "available_bytes_at_capture": 6394462208
   },
   "gpu": {
     "available": false,
