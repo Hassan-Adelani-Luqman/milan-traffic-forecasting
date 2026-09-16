@@ -1,0 +1,16 @@
+model,square_id,device,n_seeds,train_wall_s,train_wall_std,inference_wall_s,inference_ms_per_step,n_params
+persistence,5161,cpu,1,0.0,0.0,0.0,0.0,0
+seasonal_naive,5161,cpu,1,0.0,0.0,0.0,0.0,0
+harmonic_arima,5161,cpu,1,14.667,0.0,108.1881,75.1306,22
+lstm,5161,cuda,3,9.488,0.052,0.0589,0.0409,202369
+lightgbm,5161,cpu,1,0.738,0.0,0.0184,0.0128,19639
+persistence,4159,cpu,1,0.0,0.0,0.0,0.0,0
+seasonal_naive,4159,cpu,1,0.0,0.0,0.0,0.0,0
+harmonic_arima,4159,cpu,1,29.478,0.0,105.856,73.5111,22
+lstm,4159,cuda,3,9.506,0.051,0.0585,0.0406,202369
+lightgbm,4159,cpu,1,0.774,0.0,0.016,0.0111,20362
+persistence,4556,cpu,1,0.0,0.0,0.0,0.0,0
+seasonal_naive,4556,cpu,1,0.0,0.0,0.0,0.0,0
+harmonic_arima,4556,cpu,1,16.763,0.0,107.5238,74.6693,22
+lstm,4556,cuda,3,9.483,0.083,0.0591,0.041,202369
+lightgbm,4556,cpu,1,0.829,0.0,0.0185,0.0129,21010
