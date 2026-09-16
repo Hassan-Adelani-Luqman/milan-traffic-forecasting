@@ -514,7 +514,7 @@ predictions equal seasonal naive.
 
 ---
 
-## Phase 5 — Models and iterative experimentation ⬜
+## Phase 5 — Models and iterative experimentation ✅
 
 ### The three models
 
@@ -600,7 +600,7 @@ runaway job was killed. Fixed: every candidate now appends its own row. This is 
 
 ---
 
-## Phase 6 — Evaluation, comparison, failure analysis ⬜
+## Phase 6 — Evaluation, comparison, failure analysis ✅
 
 1. **9 actual-vs-predicted plots** (3 models × 3 areas) over the test week, plus a zoomed
    single-day panel per area so lag structure is visible.
@@ -621,13 +621,19 @@ runaway job was killed. Fixed: every candidate now appends its own row. This is 
 
 ---
 
-## Phase 7 — Reproducibility and repo polish ⬜
+## Phase 7 — Reproducibility and repo polish ✅
 
 1. `README.md`: summary, hardware, setup, `run.py all` description, the
    **"reproduce without downloading 19.4 GiB"** path, expected runtimes, results inline.
 2. Task runner targets complete.
 3. Verify from a clean clone: fresh venv, no-download path end to end, metrics reproduce
    to 3 significant figures with fixed seeds.
+   **Done, and stronger than the target.** A fresh clone into an empty virtualenv
+   reproduces every metric and every JSON summary *exactly*, not to 3 s.f. The only
+   regenerated differences are wall-clock timing columns and line endings. The check
+   paid for itself twice: it found the per-area metric tables had been reduced to a
+   single row each by `--rebuild-ensemble` (int/str key collision on the filename), and
+   that the results summaries embedded absolute paths from one machine.
 4. Lint and format across `src/`.
 5. `results/environment.json` finalised; MIT licence; note the dataset's ODbL terms.
 
