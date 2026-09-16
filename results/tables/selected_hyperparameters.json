@@ -28,5 +28,18 @@
     "use_calendar": true,
     "use_log": true,
     "best_iteration": 320
+  },
+  "lstm": {
+    "sequence_length": 144,
+    "hidden_size": 128,
+    "num_layers": 2,
+    "dropout": 0.0,
+    "learning_rate": 0.001,
+    "batch_size": 32,
+    "max_epochs": 30,
+    "patience": 5,
+    "weight_decay": 0.0001,
+    "use_calendar": true,
+    "best_epoch": 10
   }
 }

@@ -28,6 +28,7 @@ GENERATED = {
     "00_kaggle_ingest.ipynb": "build_kaggle_notebook.py",
     "01_kaggle_lstm.ipynb": "build_lstm_notebook.py",
     "02_eda.ipynb": "build_eda_notebook.py",
+    "03_kaggle_final.ipynb": "build_final_notebook.py",
 }
 
 

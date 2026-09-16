@@ -188,11 +188,15 @@ def _lag1_copy_ratio(predictions: np.ndarray, series: np.ndarray, start: int, st
     return float(np.mean(np.abs(predictions - persistence)) / movement)
 
 
+MODEL_ORDER = ("harmonic_arima", "lstm", "lightgbm")
+
+
 def run_final(
     config: Config,
     *,
     split_name: str = "test",
     seeds: tuple[int, ...] | None = None,
+    models: tuple[str, ...] = MODEL_ORDER,
 ) -> list[FinalResult]:
     """Fit and evaluate every model on every study area.
 
@@ -251,7 +255,9 @@ def run_final(
             results.append(result)
             print(f"  {baseline.name:<16} {metrics.summary()}")
 
-        for name in ("harmonic_arima", "lstm", "lightgbm"):
+        for name in MODEL_ORDER:
+            if name not in models:
+                continue
             hyperparams = selected.get(name)
             if hyperparams is None:
                 continue
@@ -387,6 +393,14 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("test", "stress"),
         help="Split to report on. Reported results use the test week.",
     )
+    parser.add_argument(
+        "--models",
+        default=",".join(MODEL_ORDER),
+        help=(
+            "Comma-separated models to fit. Baselines are always included. Use a "
+            "subset to smoke-test the pipeline without the LSTM, which needs a GPU."
+        ),
+    )
     return parser
 
 
@@ -395,7 +409,11 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     config = load_config(args.config)
     config.paths.mkdirs()
-    run_final(config, split_name=args.split)
+    models = tuple(name.strip() for name in args.models.split(",") if name.strip())
+    unknown = set(models) - set(MODEL_ORDER)
+    if unknown:
+        raise ValueError(f"unknown models {sorted(unknown)}; choose from {list(MODEL_ORDER)}")
+    run_final(config, split_name=args.split, models=models)
     print(f"\nwrote tables to {config.paths.tables}")
     return 0
 

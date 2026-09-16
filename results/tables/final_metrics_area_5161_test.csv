@@ -1,0 +1,5 @@
+square_id,model,split,n_seeds,mae,mae_std,rmse,rmse_std,mape,smape,mase,mase_std,r2,bias,n_params,device,lag1_copy_ratio,train_wall_s,train_wall_std,inference_wall_s,inference_ms_per_step
+5161,harmonic_arima,test,1,83.6377,0.0,128.2462,0.0,7.7982,7.6726,0.24076,0.0,0.99113,5.51,22,cpu,0.6314,31.132,0.0,69.3841,68.8335
+5161,lightgbm,test,1,86.59,0.0,130.8902,0.0,7.9732,7.8059,0.24926,0.0,0.99077,27.8512,19639,cpu,0.7853,2.243,0.0,0.0219,0.0217
+5161,persistence,test,1,92.8019,0.0,134.8778,0.0,9.1943,9.0965,0.26714,0.0,0.99019,0.1147,0,cpu,0.0,0.0,0.0,0.0,0.0
+5161,seasonal_naive,test,1,338.5937,0.0,619.04,0.0,25.9398,22.8281,0.97467,0.0,0.79345,49.8368,0,cpu,3.6844,0.0,0.0,0.0,0.0
