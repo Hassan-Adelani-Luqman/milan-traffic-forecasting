@@ -27,12 +27,18 @@ __pycache__/
 .ipynb_checkpoints/
 
 # ---- Results ----------------------------------------------------------
-# Figures, tables and predictions are regenerated; experiments.csv and
-# environment.json ARE committed as the experimentation audit trail.
+# Figures are regenerated; experiments.csv and environment*.json ARE committed
+# as the experimentation audit trail.
 results/figures/*
 !results/figures/.gitkeep
 results/predictions/*
 !results/predictions/.gitkeep
+# Prediction series ARE committed (~312 KB). They were originally treated as
+# regenerable, which is true of the harmonic ARIMA and LightGBM columns but not
+# of the LSTM: reproducing those needs a CUDA device, and on CPU the nine fits
+# take roughly 31 hours. Without them a clean clone cannot redraw the figures
+# or recheck the reported numbers against the series they came from.
+!results/predictions/*.parquet
 results/checkpoints/
 
 # ---- OS / editor ------------------------------------------------------

@@ -40,7 +40,10 @@ Session cap is 12 h, so the ingest checkpoints per day and resumes.
 - Every experiment appends a row to `results/experiments.csv` with a non-empty
   `rationale_for_next_change`.
 - Never commit `data/raw/` or `data/interim/`. Always commit
-  `data/processed/selected_series.parquet`.
+  `data/processed/selected_series.parquet` and `results/predictions/*.parquet`
+  (~312 KB) — the LSTM columns cannot be regenerated without a CUDA device, so
+  without them a clean clone cannot redraw the figures or recheck the reported
+  metrics against the series they came from.
 - Timestamps are epoch-ms UTC; always convert to Europe/Rome.
 - Rows are split by country code - always aggregate before use.
 - Report metrics in original units, after inverse-transforming.
