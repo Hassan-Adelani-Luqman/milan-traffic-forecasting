@@ -62,12 +62,33 @@
     "source": "derived",
     "description": "Flagged share of evaluable intervals"
   },
+  "best_model_gain_over_persistence": {
+    "value": 11.343789977195621,
+    "display": "11.3%",
+    "unit": "%",
+    "source": "final_metrics_all_test.csv",
+    "description": "How much the best model improves on persistence, mean MASE"
+  },
+  "best_model_test": {
+    "value": "harmonic_arima",
+    "display": "harmonic_arima",
+    "unit": "",
+    "source": "final_metrics_all_test.csv",
+    "description": "Model with the lowest mean MASE across areas on the test week"
+  },
   "bottom_50pct_share": {
     "value": 0.11618356800409319,
     "display": "11.6%",
     "unit": "%",
     "source": "distribution_stats.json",
     "description": "bottom 50pct share"
+  },
+  "copy_ratio_min": {
+    "value": 0.5359,
+    "display": "0.54",
+    "unit": "",
+    "source": "copying_test.csv",
+    "description": "Closest any model comes to persistence; 0.00 would be a collapse"
   },
   "cv_4159": {
     "value": 0.6596636979707968,
@@ -167,6 +188,55 @@
     "source": "derived",
     "description": "Timestamps x squares"
   },
+  "harmonic_fourier_orders": {
+    "value": "K1=6, K2=2",
+    "display": "K1=6, K2=2",
+    "unit": "",
+    "source": "selected_hyperparameters.json",
+    "description": "Daily and weekly Fourier orders selected by AICc"
+  },
+  "harmonic_order": {
+    "value": "(3, 0, 1)",
+    "display": "(3, 0, 1)",
+    "unit": "",
+    "source": "selected_hyperparameters.json",
+    "description": "ARIMA(p,d,q) chosen on validation MAE with harmonics fixed"
+  },
+  "inference_ms_per_step_harmonic_arima": {
+    "value": 74.6467,
+    "display": "74.647 ms",
+    "unit": "ms",
+    "source": "timing_test.csv",
+    "description": "Wall-clock milliseconds per one-step forecast for harmonic_arima, square 5161"
+  },
+  "inference_ms_per_step_lightgbm": {
+    "value": 0.0221,
+    "display": "0.022 ms",
+    "unit": "ms",
+    "source": "timing_test.csv",
+    "description": "Wall-clock milliseconds per one-step forecast for lightgbm, square 5161"
+  },
+  "inference_ms_per_step_lstm": {
+    "value": 0.0409,
+    "display": "0.041 ms",
+    "unit": "ms",
+    "source": "timing_test.csv",
+    "description": "Wall-clock milliseconds per one-step forecast for lstm, square 5161"
+  },
+  "inference_ms_per_step_lstm_ensemble": {
+    "value": 0.1226,
+    "display": "0.123 ms",
+    "unit": "ms",
+    "source": "timing_test.csv",
+    "description": "Wall-clock milliseconds per one-step forecast for lstm_ensemble, square 5161"
+  },
+  "inference_ratio_harmonic_over_lstm": {
+    "value": 1825.1026894865524,
+    "display": "1,825x",
+    "unit": "x",
+    "source": "timing_test.csv",
+    "description": "Harmonic ARIMA inference cost per step relative to the LSTM; the cheapest model to fit is the most expensive to serve"
+  },
   "ingest_mean_s": {
     "value": 1.49,
     "display": "1.49",
@@ -202,6 +272,13 @@
     "source": "autocorrelation.json",
     "description": "Lag-1 autocorrelation"
   },
+  "lightgbm_trees": {
+    "value": 320,
+    "display": "320",
+    "unit": "trees",
+    "source": "selected_hyperparameters.json",
+    "description": "Trees early stopping chose, against the n_estimators ceiling"
+  },
   "lognormal_ks_stat": {
     "value": 0.023173012329069598,
     "display": "0.0232",
@@ -222,6 +299,62 @@
     "unit": "",
     "source": "distribution_stats.json",
     "description": "Fitted lognormal sigma"
+  },
+  "lstm_best_epoch": {
+    "value": 10,
+    "display": "10",
+    "unit": "epochs",
+    "source": "selected_hyperparameters.json",
+    "description": "Epoch that was best on validation; the final fit trains this many"
+  },
+  "lstm_sequence_length": {
+    "value": 144,
+    "display": "144",
+    "unit": "steps",
+    "source": "selected_hyperparameters.json",
+    "description": "Window length the staged sweep selected"
+  },
+  "mase_mean_harmonic_arima": {
+    "value": 0.21252666666666667,
+    "display": "0.213",
+    "unit": "MASE",
+    "source": "final_metrics_all_test.csv",
+    "description": "Mean MASE for harmonic_arima across the three areas, test week"
+  },
+  "mase_mean_lightgbm": {
+    "value": 0.23390333333333335,
+    "display": "0.234",
+    "unit": "MASE",
+    "source": "final_metrics_all_test.csv",
+    "description": "Mean MASE for lightgbm across the three areas, test week"
+  },
+  "mase_mean_lstm": {
+    "value": 0.26011666666666666,
+    "display": "0.260",
+    "unit": "MASE",
+    "source": "final_metrics_all_test.csv",
+    "description": "Mean MASE for lstm across the three areas, test week"
+  },
+  "mase_mean_lstm_ensemble": {
+    "value": 0.24473999999999999,
+    "display": "0.245",
+    "unit": "MASE",
+    "source": "final_metrics_all_test.csv",
+    "description": "Mean MASE for lstm_ensemble across the three areas, test week"
+  },
+  "mase_mean_persistence": {
+    "value": 0.23972000000000002,
+    "display": "0.240",
+    "unit": "MASE",
+    "source": "final_metrics_all_test.csv",
+    "description": "Mean MASE for persistence across the three areas, test week"
+  },
+  "mase_mean_seasonal_naive": {
+    "value": 0.7600566666666667,
+    "display": "0.760",
+    "unit": "MASE",
+    "source": "final_metrics_all_test.csv",
+    "description": "Mean MASE for seasonal_naive across the three areas, test week"
   },
   "matrix_mib": {
     "value": 340.576171875,
@@ -264,6 +397,20 @@
     "unit": "intervals",
     "source": "matrix_report.json",
     "description": "Timestamps absent from the grid"
+  },
+  "models_beating_persistence": {
+    "value": 2,
+    "display": "2",
+    "unit": "models",
+    "source": "final_metrics_all_test.csv",
+    "description": "Models whose mean MASE beats persistence on the test week"
+  },
+  "models_collapsed_to_persistence": {
+    "value": 0,
+    "display": "0",
+    "unit": "models",
+    "source": "copying_test.csv",
+    "description": "Models judged to have collapsed to repeating their last input"
   },
   "n_days": {
     "value": 62,
@@ -629,6 +776,34 @@
     "source": "decomposition.json",
     "description": "Strength of the trend component"
   },
+  "stress_areas_persistence_wins": {
+    "value": 2,
+    "display": "2",
+    "unit": "areas",
+    "source": "final_metrics_all_stress.csv",
+    "description": "Areas on the holiday split where no model beats persistence"
+  },
+  "stress_worst_ratio_harmonic_arima": {
+    "value": 1.0898774398547435,
+    "display": "1.09x",
+    "unit": "x persistence",
+    "source": "final_metrics_all_stress.csv",
+    "description": "Worst per-area MASE for harmonic_arima on the holiday split, relative to persistence on the same area"
+  },
+  "stress_worst_ratio_lightgbm": {
+    "value": 2.39848565742853,
+    "display": "2.40x",
+    "unit": "x persistence",
+    "source": "final_metrics_all_stress.csv",
+    "description": "Worst per-area MASE for lightgbm on the holiday split, relative to persistence on the same area"
+  },
+  "stress_worst_ratio_lstm": {
+    "value": 2.0319370965393393,
+    "display": "2.03x",
+    "unit": "x persistence",
+    "source": "final_metrics_all_stress.csv",
+    "description": "Worst per-area MASE for lstm on the holiday split, relative to persistence on the same area"
+  },
   "top_10pct_share": {
     "value": 0.48388535420639633,
     "display": "48.4%",
@@ -677,6 +852,13 @@
     "unit": "rows",
     "source": "ingest_summary.json",
     "description": "Records parsed across all days"
+  },
+  "tuning_area": {
+    "value": 5161,
+    "display": "5,161",
+    "unit": "square id",
+    "source": "selected_hyperparameters.json",
+    "description": "Area hyperparameters were selected on; the other two reuse them"
   },
   "variance_residual": {
     "value": 0.036024862326870924,

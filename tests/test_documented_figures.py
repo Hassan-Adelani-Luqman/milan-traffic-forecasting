@@ -224,3 +224,164 @@ def test_headline_figures_agree_across_documents(figure: str, pattern: str) -> N
     """A figure quoted in more than one document must be the same figure."""
     quoting = [d for d in DOCUMENTS if _text(d) and re.search(pattern, _text(d))]
     assert quoting, f"no document quotes the {figure}"
+
+
+# --------------------------------------------------------------------------
+# The exported evidence pack
+# --------------------------------------------------------------------------
+
+
+def test_every_registered_figure_resolves_to_a_file() -> None:
+    """A spec pointing at nothing drops a figure from the report silently.
+
+    Exploratory figures live under results/figures/eda/ and evaluation figures
+    flat under results/figures/, so each spec carries the subdirectory it came
+    from. A wrong one produces no error, just a missing figure.
+    """
+    from src.config import load_config
+    from src.export_report import FIGURES
+
+    config = load_config(auto_env=False)
+    missing = []
+    for spec in FIGURES:
+        base = config.paths.figures / spec.subdir if spec.subdir else config.paths.figures
+        if not (base / spec.filename).exists():
+            missing.append(f"{spec.subdir or '.'}/{spec.filename}")
+    assert missing == [], f"registered figures that do not exist: {missing}"
+
+
+def test_every_registered_figure_was_exported() -> None:
+    from src.config import PROJECT_ROOT
+    from src.export_report import FIGURES
+
+    exported = PROJECT_ROOT / "report" / "figures"
+    if not exported.exists():
+        pytest.skip("report not exported yet; run python -m src.export_report")
+    missing = [s.filename for s in FIGURES if not (exported / s.filename).exists()]
+    assert missing == [], f"registered but not exported: {missing}"
+
+
+def test_figures_are_at_print_resolution() -> None:
+    """The report needs 300 dpi; the two stages once drifted to 300 and 150."""
+    from src.config import PROJECT_ROOT
+
+    exported = PROJECT_ROOT / "report" / "figures"
+    if not exported.exists():
+        pytest.skip("report not exported yet")
+    try:
+        from PIL import Image
+    except ImportError:  # pragma: no cover - Pillow is optional
+        pytest.skip("Pillow not installed")
+
+    low = []
+    for path in sorted(exported.glob("*.png")):
+        dpi = Image.open(path).info.get("dpi")
+        if dpi and round(dpi[0]) < 300:
+            low.append(f"{path.name} at {round(dpi[0])} dpi")
+    assert low == [], f"figures below 300 dpi: {low}"
+
+
+def test_results_summary_has_no_pending_sections() -> None:
+    """Phase 8 is done when nothing in the evidence pack still says pending."""
+    from src.config import PROJECT_ROOT
+
+    path = PROJECT_ROOT / "report" / "RESULTS_SUMMARY.md"
+    if not path.exists():
+        pytest.skip("report not exported yet")
+    text = path.read_text(encoding="utf-8")
+    assert "_Pending" not in text, "RESULTS_SUMMARY.md still has pending sections"
+    for heading in ("## Methodology", "## Results", "## Discussion and failure analysis"):
+        assert heading in text, f"missing {heading}"
+
+
+# --------------------------------------------------------------------------
+# The drafted narrative must agree with the artefacts
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def draft() -> str:
+    from src.config import PROJECT_ROOT
+
+    path = PROJECT_ROOT / "report" / "DRAFT_SECTIONS.md"
+    if not path.exists():
+        pytest.skip("draft sections not written")
+    return path.read_text(encoding="utf-8")
+
+
+def _final_rows(split: str) -> list[dict[str, str]]:
+    import csv as _csv
+
+    from src.config import PROJECT_ROOT
+
+    path = PROJECT_ROOT / "results" / "tables" / f"final_metrics_all_{split}.csv"
+    if not path.exists():
+        pytest.skip(f"{split} metrics not present")
+    with path.open(encoding="utf-8", newline="") as fh:
+        return list(_csv.DictReader(fh))
+
+
+def test_draft_quotes_the_winning_mean_mase(draft: str) -> None:
+    rows = _final_rows("test")
+    values = [float(r["mase"]) for r in rows if r["model"] == "harmonic_arima"]
+    mean = sum(values) / len(values)
+    assert f"{mean:.3f}" in draft, f"draft should quote harmonic mean MASE {mean:.3f}"
+
+
+def test_draft_quotes_per_area_mase_correctly(draft: str) -> None:
+    """Every MASE the results table states must appear as written."""
+    rows = _final_rows("test")
+    wanted = {
+        ("harmonic_arima", "4159"),
+        ("harmonic_arima", "4556"),
+        ("lightgbm", "5161"),
+        ("persistence", "5161"),
+    }
+    for row in rows:
+        if (row["model"], row["square_id"]) in wanted:
+            assert f"{float(row['mase']):.3f}" in draft, (
+                f"{row['model']} on {row['square_id']} is {float(row['mase']):.3f} "
+                "but that value does not appear in the draft"
+            )
+
+
+def test_draft_parameter_counts_match_the_tables(draft: str) -> None:
+    rows = _final_rows("test")
+    for model in ("harmonic_arima", "lightgbm", "lstm"):
+        params = {int(r["n_params"]) for r in rows if r["model"] == model}
+        value = max(params)
+        assert (
+            f"{value:,}" in draft or str(value) in draft
+        ), f"{model} has {value:,} parameters, not quoted in the draft"
+
+
+def test_draft_inference_ratio_matches_the_timing_table(draft: str) -> None:
+    """The cost-inversion claim is the one most worth pinning."""
+    import csv as _csv
+
+    from src.config import PROJECT_ROOT
+
+    path = PROJECT_ROOT / "results" / "tables" / "timing_test.csv"
+    if not path.exists():
+        pytest.skip("timing table not present")
+    with path.open(encoding="utf-8", newline="") as fh:
+        rows = [r for r in _csv.DictReader(fh) if r["square_id"] == "5161"]
+    per_step = {r["model"]: float(r["inference_ms_per_step"]) for r in rows}
+    ratio = per_step["harmonic_arima"] / per_step["lstm"]
+    assert f"{ratio:,.0f}" in draft, f"inference ratio is {ratio:,.0f}x"
+
+    # The grid-scale claim: one forecast for every cell, against the interval.
+    grid_minutes = per_step["harmonic_arima"] * 10_000 / 1000 / 60
+    assert (
+        f"{grid_minutes:.1f} minutes" in draft
+    ), f"a grid-wide pass takes {grid_minutes:.1f} minutes"
+
+
+def test_draft_does_not_claim_a_ratio_between_different_configurations(draft: str) -> None:
+    """Regression: 13.8 h and 2.6 s were different configurations.
+
+    The measured 777x compares one configuration fitted on both machines. Pairing
+    the largest CPU fit with the smallest GPU fit would have inflated it 25-fold.
+    """
+    assert "13.8 hours against 2.6 seconds" not in draft
+    assert "2,019 seconds on the CPU and 2.6 seconds" in draft

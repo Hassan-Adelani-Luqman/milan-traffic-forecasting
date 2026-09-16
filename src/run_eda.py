@@ -52,7 +52,7 @@ from src.tsanalysis import (
 
 __all__ = ["run_eda", "load_inputs", "window_mask"]
 
-FIGURE_DPI = 300
+from src.plots import FIGURE_DPI
 
 
 def load_inputs(config: Config) -> dict[str, Any]:

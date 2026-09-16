@@ -652,6 +652,267 @@ def _eda_facts(facts: FactSet, tables: Path) -> None:
                 )
 
 
+def _model_facts(facts: FactSet, tables: Path) -> None:
+    """Named figures from tuning, the final fits and the diagnostics.
+
+    Naming each one is what forces the distinctions that are easy to blur in
+    prose: the LSTM's error and its ensemble's error are different quantities,
+    a training time on a GPU is not comparable to one on a CPU, and a model that
+    wins on validation need not win on test.
+    """
+    selected = _json(tables / "selected_hyperparameters.json")
+    if selected:
+        harmonic = selected.get("harmonic_arima", {})
+        gbm = selected.get("lightgbm", {})
+        lstm = selected.get("lstm", {})
+        facts.add(
+            "Models",
+            Fact(
+                "tuning_area",
+                selected.get("tuning_area", 0),
+                "square id",
+                "selected_hyperparameters.json",
+                "Area hyperparameters were selected on; the other two reuse them",
+            ),
+        )
+        if harmonic:
+            facts.add(
+                "Models",
+                Fact(
+                    "harmonic_order",
+                    str(tuple(harmonic.get("order", []))),
+                    "",
+                    "selected_hyperparameters.json",
+                    "ARIMA(p,d,q) chosen on validation MAE with harmonics fixed",
+                ),
+            )
+            facts.add(
+                "Models",
+                Fact(
+                    "harmonic_fourier_orders",
+                    f"K1={harmonic.get('k_daily')}, K2={harmonic.get('k_weekly')}",
+                    "",
+                    "selected_hyperparameters.json",
+                    "Daily and weekly Fourier orders selected by AICc",
+                ),
+            )
+        if gbm:
+            facts.add(
+                "Models",
+                Fact(
+                    "lightgbm_trees",
+                    int(gbm.get("best_iteration", 0)),
+                    "trees",
+                    "selected_hyperparameters.json",
+                    "Trees early stopping chose, against the n_estimators ceiling",
+                ),
+            )
+        if lstm:
+            facts.add(
+                "Models",
+                Fact(
+                    "lstm_sequence_length",
+                    int(lstm.get("sequence_length", 0)),
+                    "steps",
+                    "selected_hyperparameters.json",
+                    "Window length the staged sweep selected",
+                ),
+            )
+            facts.add(
+                "Models",
+                Fact(
+                    "lstm_best_epoch",
+                    int(lstm.get("best_epoch", -1)),
+                    "epochs",
+                    "selected_hyperparameters.json",
+                    "Epoch that was best on validation; the final fit trains this many",
+                ),
+            )
+
+    experiments = tables / "experiments.csv"
+    if experiments.exists():
+        rows = _csv(experiments)
+        facts.add(
+            "Models",
+            Fact(
+                "experiments_logged",
+                len(rows),
+                "runs",
+                "experiments.csv",
+                "Candidates logged across all three models, each with a rationale",
+            ),
+        )
+
+    # --- Test-week accuracy -------------------------------------------------
+    combined = tables / "final_metrics_all_test.csv"
+    if combined.exists():
+        rows = _csv(combined)
+        by_model: dict[str, list[float]] = {}
+        for row in rows:
+            by_model.setdefault(row["model"], []).append(float(row["mase"]))
+
+        for model, values in by_model.items():
+            facts.add(
+                "Results",
+                Fact(
+                    f"mase_mean_{model}",
+                    sum(values) / len(values),
+                    "MASE",
+                    "final_metrics_all_test.csv",
+                    f"Mean MASE for {model} across the three areas, test week",
+                    display=f"{sum(values) / len(values):.3f}",
+                ),
+            )
+
+        persistence = sum(by_model.get("persistence", [1.0])) / max(
+            len(by_model.get("persistence", [1.0])), 1
+        )
+        ranked = sorted((sum(v) / len(v), m) for m, v in by_model.items())
+        best_mase, best_model = ranked[0]
+        facts.add(
+            "Results",
+            Fact(
+                "best_model_test",
+                best_model,
+                "",
+                "final_metrics_all_test.csv",
+                "Model with the lowest mean MASE across areas on the test week",
+            ),
+        )
+        facts.add(
+            "Results",
+            Fact(
+                "best_model_gain_over_persistence",
+                (persistence - best_mase) / persistence * 100,
+                "%",
+                "final_metrics_all_test.csv",
+                "How much the best model improves on persistence, mean MASE",
+                display=f"{(persistence - best_mase) / persistence * 100:.1f}%",
+            ),
+        )
+        beat = [m for m, v in by_model.items() if sum(v) / len(v) < persistence]
+        facts.add(
+            "Results",
+            Fact(
+                "models_beating_persistence",
+                len([m for m in beat if m != "persistence"]),
+                "models",
+                "final_metrics_all_test.csv",
+                "Models whose mean MASE beats persistence on the test week",
+            ),
+        )
+
+    # --- Holiday degradation ------------------------------------------------
+    stress = tables / "final_metrics_all_stress.csv"
+    if stress.exists() and combined.exists():
+        stress_rows = _csv(stress)
+        by_area_model = {(r["square_id"], r["model"]): float(r["mase"]) for r in stress_rows}
+        persistence_by_area = {
+            r["square_id"]: float(r["mase"]) for r in stress_rows if r["model"] == "persistence"
+        }
+        for model in ("harmonic_arima", "lightgbm", "lstm"):
+            ratios = [
+                by_area_model[(area, model)] / base
+                for area, base in persistence_by_area.items()
+                if (area, model) in by_area_model
+            ]
+            if not ratios:
+                continue
+            worst = max(ratios)
+            facts.add(
+                "Failure analysis",
+                Fact(
+                    f"stress_worst_ratio_{model}",
+                    worst,
+                    "x persistence",
+                    "final_metrics_all_stress.csv",
+                    f"Worst per-area MASE for {model} on the holiday split, "
+                    "relative to persistence on the same area",
+                    display=f"{worst:.2f}x",
+                ),
+            )
+        wins = sum(
+            1
+            for area, base in persistence_by_area.items()
+            if all(
+                by_area_model.get((area, m), float("inf")) >= base
+                for m in ("harmonic_arima", "lightgbm", "lstm")
+            )
+        )
+        facts.add(
+            "Failure analysis",
+            Fact(
+                "stress_areas_persistence_wins",
+                wins,
+                "areas",
+                "final_metrics_all_stress.csv",
+                "Areas on the holiday split where no model beats persistence",
+            ),
+        )
+
+    # --- Copying ------------------------------------------------------------
+    copying = tables / "copying_test.csv"
+    if copying.exists():
+        rows = [r for r in _csv(copying) if r["model"] not in {"persistence", "seasonal_naive"}]
+        if rows:
+            ratios = [float(r["copy_ratio"]) for r in rows]
+            facts.add(
+                "Diagnostics",
+                Fact(
+                    "copy_ratio_min",
+                    min(ratios),
+                    "",
+                    "copying_test.csv",
+                    "Closest any model comes to persistence; 0.00 would be a collapse",
+                    display=f"{min(ratios):.2f}",
+                ),
+            )
+            facts.add(
+                "Diagnostics",
+                Fact(
+                    "models_collapsed_to_persistence",
+                    sum(1 for r in rows if r["verdict"] == "collapsed"),
+                    "models",
+                    "copying_test.csv",
+                    "Models judged to have collapsed to repeating their last input",
+                ),
+            )
+
+    # --- Cost ---------------------------------------------------------------
+    timing = tables / "timing_test.csv"
+    if timing.exists():
+        rows = [r for r in _csv(timing) if r["square_id"] == "5161"]
+        per_step = {r["model"]: float(r["inference_ms_per_step"]) for r in rows}
+        if per_step.get("harmonic_arima") and per_step.get("lstm"):
+            ratio = per_step["harmonic_arima"] / per_step["lstm"]
+            facts.add(
+                "Cost",
+                Fact(
+                    "inference_ratio_harmonic_over_lstm",
+                    ratio,
+                    "x",
+                    "timing_test.csv",
+                    "Harmonic ARIMA inference cost per step relative to the LSTM; "
+                    "the cheapest model to fit is the most expensive to serve",
+                    display=f"{ratio:,.0f}x",
+                ),
+            )
+        for model, value in per_step.items():
+            if model in {"persistence", "seasonal_naive"}:
+                continue
+            facts.add(
+                "Cost",
+                Fact(
+                    f"inference_ms_per_step_{model}",
+                    value,
+                    "ms",
+                    "timing_test.csv",
+                    f"Wall-clock milliseconds per one-step forecast for {model}, square 5161",
+                    display=f"{value:.3f} ms",
+                ),
+            )
+
+
 def collect_facts(config: Config) -> FactSet:
     """Compute every named figure from the artefacts on disk."""
     tables = config.paths.tables
@@ -660,6 +921,7 @@ def collect_facts(config: Config) -> FactSet:
     _timing_facts(facts, tables)
     _memory_facts(facts, config, tables)
     _eda_facts(facts, tables)
+    _model_facts(facts, tables)
     return facts
 
 

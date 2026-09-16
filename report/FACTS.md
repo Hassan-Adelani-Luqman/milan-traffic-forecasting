@@ -157,3 +157,54 @@ Regenerate with `python -m src.facts`.
 | `anomalies_on_holidays` | 35 | intervals | `anomalies.csv` | Flagged intervals falling on a holiday |
 | `anomalies_rate` | 1.73% | % | `derived` | Flagged share of evaluable intervals |
 
+## Models
+
+| key | value | unit | source | description |
+|---|---|---|---|---|
+| `harmonic_fourier_orders` | K1=6, K2=2 |  | `selected_hyperparameters.json` | Daily and weekly Fourier orders selected by AICc |
+| `harmonic_order` | (3, 0, 1) |  | `selected_hyperparameters.json` | ARIMA(p,d,q) chosen on validation MAE with harmonics fixed |
+| `lightgbm_trees` | 320 | trees | `selected_hyperparameters.json` | Trees early stopping chose, against the n_estimators ceiling |
+| `lstm_best_epoch` | 10 | epochs | `selected_hyperparameters.json` | Epoch that was best on validation; the final fit trains this many |
+| `lstm_sequence_length` | 144 | steps | `selected_hyperparameters.json` | Window length the staged sweep selected |
+| `tuning_area` | 5,161 | square id | `selected_hyperparameters.json` | Area hyperparameters were selected on; the other two reuse them |
+
+## Results
+
+| key | value | unit | source | description |
+|---|---|---|---|---|
+| `best_model_gain_over_persistence` | 11.3% | % | `final_metrics_all_test.csv` | How much the best model improves on persistence, mean MASE |
+| `best_model_test` | harmonic_arima |  | `final_metrics_all_test.csv` | Model with the lowest mean MASE across areas on the test week |
+| `mase_mean_harmonic_arima` | 0.213 | MASE | `final_metrics_all_test.csv` | Mean MASE for harmonic_arima across the three areas, test week |
+| `mase_mean_lightgbm` | 0.234 | MASE | `final_metrics_all_test.csv` | Mean MASE for lightgbm across the three areas, test week |
+| `mase_mean_lstm` | 0.260 | MASE | `final_metrics_all_test.csv` | Mean MASE for lstm across the three areas, test week |
+| `mase_mean_lstm_ensemble` | 0.245 | MASE | `final_metrics_all_test.csv` | Mean MASE for lstm_ensemble across the three areas, test week |
+| `mase_mean_persistence` | 0.240 | MASE | `final_metrics_all_test.csv` | Mean MASE for persistence across the three areas, test week |
+| `mase_mean_seasonal_naive` | 0.760 | MASE | `final_metrics_all_test.csv` | Mean MASE for seasonal_naive across the three areas, test week |
+| `models_beating_persistence` | 2 | models | `final_metrics_all_test.csv` | Models whose mean MASE beats persistence on the test week |
+
+## Failure analysis
+
+| key | value | unit | source | description |
+|---|---|---|---|---|
+| `stress_areas_persistence_wins` | 2 | areas | `final_metrics_all_stress.csv` | Areas on the holiday split where no model beats persistence |
+| `stress_worst_ratio_harmonic_arima` | 1.09x | x persistence | `final_metrics_all_stress.csv` | Worst per-area MASE for harmonic_arima on the holiday split, relative to persistence on the same area |
+| `stress_worst_ratio_lightgbm` | 2.40x | x persistence | `final_metrics_all_stress.csv` | Worst per-area MASE for lightgbm on the holiday split, relative to persistence on the same area |
+| `stress_worst_ratio_lstm` | 2.03x | x persistence | `final_metrics_all_stress.csv` | Worst per-area MASE for lstm on the holiday split, relative to persistence on the same area |
+
+## Diagnostics
+
+| key | value | unit | source | description |
+|---|---|---|---|---|
+| `copy_ratio_min` | 0.54 |  | `copying_test.csv` | Closest any model comes to persistence; 0.00 would be a collapse |
+| `models_collapsed_to_persistence` | 0 | models | `copying_test.csv` | Models judged to have collapsed to repeating their last input |
+
+## Cost
+
+| key | value | unit | source | description |
+|---|---|---|---|---|
+| `inference_ms_per_step_harmonic_arima` | 74.647 ms | ms | `timing_test.csv` | Wall-clock milliseconds per one-step forecast for harmonic_arima, square 5161 |
+| `inference_ms_per_step_lightgbm` | 0.022 ms | ms | `timing_test.csv` | Wall-clock milliseconds per one-step forecast for lightgbm, square 5161 |
+| `inference_ms_per_step_lstm` | 0.041 ms | ms | `timing_test.csv` | Wall-clock milliseconds per one-step forecast for lstm, square 5161 |
+| `inference_ms_per_step_lstm_ensemble` | 0.123 ms | ms | `timing_test.csv` | Wall-clock milliseconds per one-step forecast for lstm_ensemble, square 5161 |
+| `inference_ratio_harmonic_over_lstm` | 1,825x | x | `timing_test.csv` | Harmonic ARIMA inference cost per step relative to the LSTM; the cheapest model to fit is the most expensive to serve |
+

@@ -38,6 +38,9 @@ class FigureSpec:
     section: str
     shows: str
     numbers: str
+    # Exploratory figures are written to results/figures/eda/; the evaluation
+    # figures are written flat to results/figures/.
+    subdir: str = "eda"
 
 
 FIGURES: tuple[FigureSpec, ...] = (
@@ -89,6 +92,91 @@ FIGURES: tuple[FigureSpec, ...] = (
         "Spectral power against period in hours, dominant cycles annotated.",
         "spectral_peaks.csv",
     ),
+    # --- Results: one actual-vs-predicted figure per model per area ---
+    *(
+        FigureSpec(
+            f"forecast_test_{area}_{model}.png",
+            "Results",
+            f"{model} against observed on square {area} over the test week, with the "
+            "busiest day enlarged beneath and persistence overlaid.",
+            f"final_metrics_area_{area}_test.csv",
+            subdir="",
+        )
+        for area in (5161, 4159, 4556)
+        for model in ("harmonic_arima", "lightgbm", "lstm")
+    ),
+    FigureSpec(
+        "cross_area_mase_test.png",
+        "Results",
+        "MASE per model grouped by area; the only metric comparable across areas "
+        "that differ by an order of magnitude in volume.",
+        "cross_area_mase_test.csv",
+        subdir="",
+    ),
+    # --- Diagnostics ---
+    *(
+        FigureSpec(
+            f"error_by_hour_test_{area}.png",
+            "Discussion",
+            f"Mean absolute error against hour of day on square {area}, one line per model.",
+            "error_by_hour_test.csv",
+            subdir="",
+        )
+        for area in (5161, 4159, 4556)
+    ),
+    *(
+        FigureSpec(
+            f"error_heatmap_test_{area}_{model}.png",
+            "Discussion",
+            f"{model} error over day-of-week by hour-of-day on square {area}.",
+            "error_by_daytype_test.csv",
+            subdir="",
+        )
+        for area in (5161, 4159, 4556)
+        for model in ("harmonic_arima", "lightgbm", "lstm")
+    ),
+    *(
+        FigureSpec(
+            f"residual_acf_test_{area}.png",
+            "Discussion",
+            f"Residual autocorrelation per model on square {area}; structure here is "
+            "signal the model did not use.",
+            "final_metrics_all_test.csv",
+            subdir="",
+        )
+        for area in (5161, 4159, 4556)
+    ),
+    *(
+        FigureSpec(
+            f"cross_correlation_test_{area}.png",
+            "Discussion",
+            f"Forecast-to-observation cross-correlation on square {area}. A lag-1 peak "
+            "is what a causal one-step forecast looks like, not evidence of copying.",
+            "copying_test.csv",
+            subdir="",
+        )
+        for area in (5161, 4159, 4556)
+    ),
+    # --- Failure analysis on the held-out holiday split ---
+    *(
+        FigureSpec(
+            f"forecast_stress_{area}_{model}.png",
+            "Failure analysis",
+            f"{model} on square {area} over the holiday stress split (23 Dec - 1 Jan), "
+            "never tuned on.",
+            f"final_metrics_area_{area}_stress.csv",
+            subdir="",
+        )
+        for area in (5161, 4159, 4556)
+        for model in ("harmonic_arima", "lightgbm", "lstm")
+    ),
+    FigureSpec(
+        "cross_area_mase_stress.png",
+        "Failure analysis",
+        "MASE per model on the stress split, where persistence wins two of three areas.",
+        "cross_area_mase_stress.csv",
+        subdir="",
+    ),
 )
 
 # Section -> the tables whose numbers belong in it.
@@ -107,6 +195,28 @@ SECTION_TABLES: dict[str, tuple[str, ...]] = {
         "autocorrelation.json",
         "spectral_peaks.csv",
         "anomalies.csv",
+    ),
+    "Results": (
+        "final_metrics_all_test.csv",
+        "final_metrics_area_5161_test.csv",
+        "final_metrics_area_4159_test.csv",
+        "final_metrics_area_4556_test.csv",
+        "cross_area_mase_test.csv",
+        "timing_test.csv",
+        "selected_hyperparameters.json",
+        "experiments.csv",
+    ),
+    "Discussion": (
+        "copying_test.csv",
+        "error_by_daytype_test.csv",
+        "error_by_hour_test.csv",
+        "failure_windows_test.csv",
+    ),
+    "Failure analysis": (
+        "final_metrics_all_stress.csv",
+        "cross_area_mase_stress.csv",
+        "copying_stress.csv",
+        "failure_windows_stress.csv",
     ),
 }
 
@@ -135,7 +245,8 @@ def _copy_artifacts(config: Config, report_dir: Path) -> dict[str, int]:
     figures_out = report_dir / "figures"
     figures_out.mkdir(parents=True, exist_ok=True)
     for spec in FIGURES:
-        source = config.paths.figures / "eda" / spec.filename
+        base = config.paths.figures / spec.subdir if spec.subdir else config.paths.figures
+        source = base / spec.filename
         if source.exists():
             shutil.copy2(source, figures_out / spec.filename)
             counts["figures"] += 1
@@ -414,6 +525,229 @@ def _section_exploratory(tables: Path) -> list[str]:
     return lines
 
 
+def _section_methodology(tables: Path) -> list[str]:
+    """Numbers for the Methodology section."""
+    lines = ["## Methodology", ""]
+
+    selected = _read_json(tables / "selected_hyperparameters.json")
+    lines += [
+        "### Protocol",
+        "",
+        "- One-step-ahead (10 minutes), univariate, one model per area, native resolution.",
+        "- Inference is `walk_forward` with true observed history, never a recursive rollout.",
+        f"- Tuning ran on square {selected.get('tuning_area')} only, selecting on validation MAE.",
+        "- Transforms are fitted on the training split alone; `LogStandardScaler` raises",
+        "  `LeakageError` if asked to refit.",
+        "- Final fits use train + validation; the test week is untouched until prediction.",
+        "",
+        "### Selected hyperparameters",
+        "",
+    ]
+
+    harmonic = selected.get("harmonic_arima", {})
+    gbm = selected.get("lightgbm", {})
+    lstm = selected.get("lstm", {})
+    lines += [
+        "| Model | Selection | Value |",
+        "|---|---|---|",
+        f"| harmonic ARIMA | Fourier orders (AICc) | K1={harmonic.get('k_daily')}, "
+        f"K2={harmonic.get('k_weekly')} |",
+        f"| harmonic ARIMA | ARIMA order (validation MAE) | {tuple(harmonic.get('order', []))} |",
+        f"| harmonic ARIMA | AICc | {harmonic.get('aicc', float('nan')):.1f} |",
+        f"| LightGBM | num_leaves | {gbm.get('num_leaves')} |",
+        f"| LightGBM | learning_rate | {gbm.get('learning_rate', 0):.5f} |",
+        f"| LightGBM | trees after early stopping | {gbm.get('best_iteration')} of "
+        f"{gbm.get('n_estimators')} ceiling |",
+        f"| LSTM | sequence_length | {lstm.get('sequence_length')} |",
+        f"| LSTM | hidden_size x layers | {lstm.get('hidden_size')} x {lstm.get('num_layers')} |",
+        f"| LSTM | batch_size, learning_rate | {lstm.get('batch_size')}, "
+        f"{lstm.get('learning_rate')} |",
+        f"| LSTM | dropout, weight_decay | {lstm.get('dropout')}, {lstm.get('weight_decay')} |",
+        f"| LSTM | best epoch on validation | {lstm.get('best_epoch')} |",
+        "",
+    ]
+
+    experiments = tables / "experiments.csv"
+    if experiments.exists():
+        rows = _read_csv(experiments)
+        by_model: dict[str, int] = {}
+        for row in rows:
+            by_model[row["model"]] = by_model.get(row["model"], 0) + 1
+        lines += [
+            "### Search effort",
+            "",
+            f"{len(rows)} experiments logged to `results/experiments.csv`, every one carrying a",
+            "non-empty `rationale_for_next_change`.",
+            "",
+            "| Model | Candidates logged |",
+            "|---|---:|",
+        ]
+        lines += [f"| {model} | {count} |" for model, count in sorted(by_model.items())]
+        lines += [""]
+
+    return lines
+
+
+def _section_results(tables: Path) -> list[str]:
+    """Numbers for the Results section."""
+    lines = ["## Results", ""]
+
+    cross = tables / "cross_area_mase_test.csv"
+    if cross.exists():
+        rows = _read_csv(cross)
+        lines += [
+            "### Test week (16-22 Dec 2013), MASE by area",
+            "",
+            "MASE is the comparable metric: the areas differ by an order of magnitude in",
+            "volume, so raw MAE cannot be compared across them. Lower is better.",
+            "",
+            "| model | 5161 | 4159 | 4556 | mean | worst |",
+            "|---|---:|---:|---:|---:|---:|",
+        ]
+        for row in rows:
+            lines.append(
+                f"| {row['model']} | {row['mase_5161']} | {row['mase_4159']} | "
+                f"{row['mase_4556']} | {row['mase_mean']} | {row['mase_worst']} |"
+            )
+        lines += [""]
+
+    for area in (5161, 4159, 4556):
+        path = tables / f"final_metrics_area_{area}_test.csv"
+        if not path.exists():
+            continue
+        rows = _read_csv(path)
+        lines += [
+            f"### Square {area}, test week",
+            "",
+            *_markdown_table(
+                rows,
+                ["model", "mae", "mae_std", "rmse", "mape", "smape", "mase", "r2", "n_seeds"],
+            ),
+            "",
+        ]
+
+    timing = tables / "timing_test.csv"
+    if timing.exists():
+        rows = [r for r in _read_csv(timing) if int(r["square_id"]) == 5161]
+        lines += [
+            "### Computational cost (square 5161, 1,008 forecasts)",
+            "",
+            "Training times are **not comparable across devices**; the device column says",
+            "which produced each number. Hardware is recorded in",
+            "`results/environment.json` (local) and `results/environment_final_runs.json`",
+            "(the Kaggle T4 session that produced these).",
+            "",
+            *_markdown_table(
+                rows,
+                [
+                    "model",
+                    "device",
+                    "n_seeds",
+                    "train_wall_s",
+                    "inference_wall_s",
+                    "inference_ms_per_step",
+                    "n_params",
+                ],
+            ),
+            "",
+        ]
+
+    return lines
+
+
+def _section_discussion(tables: Path) -> list[str]:
+    """Numbers for the Discussion and failure-analysis sections."""
+    lines = ["## Discussion and failure analysis", ""]
+
+    copying = tables / "copying_test.csv"
+    if copying.exists():
+        lines += [
+            "### Collapse-to-persistence check",
+            "",
+            "The lag-1 autocorrelation of the study series is 0.987, so a model can post a",
+            "respectable error by repeating its last input. `copy_ratio` is the distance",
+            "between the forecast and persistence, divided by how far the series moves",
+            "between steps; 0.00 means the two are the same forecast.",
+            "",
+            "`peak_lag` is reported but is **not** the test. A one-step forecast is built",
+            "only from data up to t-1, so it cannot contain the innovation at t and will",
+            "correlate slightly more with the previous observation than the current one; a",
+            "lag-1 peak is what a causal forecast looks like. Seasonal naive is the only",
+            "model here peaking at lag 0 and it is the worst forecaster in the study.",
+            "",
+            *_markdown_table(
+                _read_csv(copying),
+                ["square_id", "model", "peak_lag", "lag_margin", "copy_ratio", "verdict"],
+            ),
+            "",
+        ]
+
+    daytype = tables / "error_by_daytype_test.csv"
+    if daytype.exists():
+        lines += [
+            "### Error by day type (test week)",
+            "",
+            *_markdown_table(
+                _read_csv(daytype),
+                [
+                    "square_id",
+                    "model",
+                    "weekday_mae",
+                    "weekend_mae",
+                    "weekend_penalty",
+                    "n_weekend",
+                ],
+            ),
+            "",
+        ]
+
+    failures = tables / "failure_windows_test.csv"
+    if failures.exists():
+        rows = [
+            r for r in _read_csv(failures) if r["model"] in {"harmonic_arima", "lightgbm", "lstm"}
+        ]
+        rows.sort(key=lambda r: -float(r["ratio_to_persistence"]))
+        lines += [
+            "### Worst contiguous 6-hour windows (test week)",
+            "",
+            "`ratio_to_persistence` above 1 means the baseline would have been better over",
+            "exactly that stretch.",
+            "",
+            *_markdown_table(
+                rows[:12],
+                [
+                    "square_id",
+                    "model",
+                    "start",
+                    "mae",
+                    "persistence_mae",
+                    "ratio_to_persistence",
+                ],
+            ),
+            "",
+        ]
+
+    stress = tables / "cross_area_mase_stress.csv"
+    if stress.exists():
+        lines += [
+            "### Held-out stress split (23 Dec - 1 Jan), MASE by area",
+            "",
+            "Never tuned on and never used for selection. Holds four of the eight Italian",
+            "public holidays in the study period.",
+            "",
+            "| model | 5161 | 4159 | 4556 | mean |",
+            "|---|---:|---:|---:|---:|",
+        ]
+        for row in _read_csv(stress):
+            lines.append(
+                f"| {row['model']} | {row['mase_5161']} | {row['mase_4159']} | "
+                f"{row['mase_4556']} | {row['mase_mean']} |"
+            )
+        lines += [""]
+
+    return lines
+
+
 def _results_summary(report_dir: Path) -> Path:
     """Write the factual evidence dump."""
     tables = report_dir / "tables"
@@ -432,22 +766,12 @@ def _results_summary(report_dir: Path) -> Path:
     lines += _section_data_preparation(tables)
     lines += ["---", ""]
     lines += _section_exploratory(tables)
-    lines += [
-        "---",
-        "",
-        "## Methodology",
-        "",
-        "_Pending: Phase 4 (forecasting framework) and Phase 5 (models and tuning)._",
-        "",
-        "## Results and Discussion",
-        "",
-        "_Pending: Phase 5 (experiments) and Phase 6 (evaluation and failure analysis)._",
-        "",
-        "## Conclusion and Future Work",
-        "",
-        "_Pending: depends on the results above._",
-        "",
-    ]
+    lines += ["---", ""]
+    lines += _section_methodology(tables)
+    lines += ["---", ""]
+    lines += _section_results(tables)
+    lines += ["---", ""]
+    lines += _section_discussion(tables)
 
     path = report_dir / "RESULTS_SUMMARY.md"
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

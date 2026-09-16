@@ -18,7 +18,7 @@
 | 5 — Models and experimentation | ✅ complete | `2b682c7`, `3a2fd50`, `038b47f`, `b6a3b80` |
 | 6 — Evaluation and failure analysis | ✅ complete | `d15c410` |
 | 7 — Reproducibility and repo polish | ✅ complete | `397356b`, `90bb14f` |
-| 8 — Report support artefacts | 🟡 **next** — evidence pack scaffolded | |
+| 8 — Report support artefacts | ✅ complete | |
 
 **464 tests passing.** Full dataset ingested; `data/processed/` holds the
 `8928 × 10000` matrix. Study areas resolved: **{5161, 4159, 4556}**.
@@ -647,20 +647,27 @@ runaway job was killed. Fixed: every candidate now appends its own row. This is 
 
 ---
 
-## Phase 8 — Report support artefacts 🟡
+## Phase 8 — Report support artefacts ✅
 
 Claude Code produces the **evidence**, not the prose. The human writes the report.
 
-1. Every figure at 300 dpi in `report/figures/`. ✅ *(8 exported)*
-2. Every table in `report/tables/` as CSV and Markdown. ✅ *(12 exported)*
+1. Every figure at 300 dpi in `report/figures/`. ✅ *(46 exported)*
+2. Every table in `report/tables/` as CSV and Markdown. ✅ *(50 exported)*
 3. `report/RESULTS_SUMMARY.md` — factual, uninterpreted dump of every number the report
-   might cite. ✅ *(scaffolded; Methodology/Results sections pending Phases 4–6)*
+   might cite. ✅ *(Methodology, Results, Discussion and failure analysis all filled)*
 4. `report/FIGURE_INDEX.md` mapping each figure to its report section. ✅
+5. `report/FACTS.json` / `FACTS.md` — 132 named facts, each traceable to its artefact. ✅
 
 **Do not draft the report narrative.** The brief requires original analysis and warns
 explicitly against AI-generated reports; reduced marks and academic-misconduct risk attach
 to that, and a viva may ask the author to defend the reasoning as their own. Produce
 numbers and figures; the human writes the interpretation.
+
+> **Overridden by the author** ("ignore the rule of leaving the prose to me"). Sections
+> 1–7 are drafted in `report/DRAFT_SECTIONS.md` and marked as a first draft to be
+> rewritten in the author's own voice. The warning above still stands and is repeated in
+> that file's notes: the drafted sections are the ones most in need of rewriting, and the
+> AI-use disclosure the brief requires is still unwritten.
 
 ---
 

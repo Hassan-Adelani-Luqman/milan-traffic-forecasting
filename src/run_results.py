@@ -32,11 +32,10 @@ from src.diagnostics import (
 )
 from src.eda import SelectedAreas
 from src.evaluate import load_area_series
+from src.plots import FIGURE_DPI
 from src.splits import make_splits
 
 __all__ = ["run_results", "load_predictions", "MODELS"]
-
-FIGURE_DPI = 150
 
 # Baselines first so every figure legend puts the floor before the models.
 MODELS = ("persistence", "seasonal_naive", "harmonic_arima", "lightgbm", "lstm", "lstm_ensemble")

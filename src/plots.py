@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 
 __all__ = [
+    "FIGURE_DPI",
     "plot_total_distribution",
     "plot_spatial_totals",
     "plot_series_panel",
@@ -34,6 +35,11 @@ __all__ = [
     "plot_cross_correlation",
     "plot_cross_area_mase",
 ]
+
+# Print resolution for every exported figure. Defined once: the exploratory and
+# results stages previously set this independently and drifted to 300 and 150,
+# so half the report's figures were at half the intended resolution.
+FIGURE_DPI = 300
 
 # Colour-blind safe, distinguishable in greyscale print.
 _SERIES_COLOURS = ("#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00")

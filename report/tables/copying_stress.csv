@@ -1,0 +1,16 @@
+square_id,model,peak_lag,peak_correlation,lag0_correlation,lag1_correlation,lag_margin,copy_ratio,verdict
+5161,persistence,1,0.99971,0.99527,0.99971,0.00444,0.0,collapsed
+5161,seasonal_naive,1,0.81744,0.81598,0.81744,0.00147,6.3765,independent
+5161,harmonic_arima,1,0.99777,0.99495,0.99777,0.00283,0.7446,independent
+5161,lightgbm,1,0.9896,0.9874,0.9896,0.0022,1.5096,independent
+5161,lstm,1,0.99072,0.98945,0.99072,0.00127,1.6111,independent
+4159,persistence,1,0.99995,0.93889,0.99995,0.06106,0.0,collapsed
+4159,seasonal_naive,0,0.40651,0.40651,0.40308,-0.00342,3.0711,independent
+4159,harmonic_arima,1,0.97899,0.94859,0.97899,0.0304,0.6783,independent
+4159,lightgbm,1,0.92186,0.901,0.92186,0.02086,2.2252,independent
+4159,lstm,1,0.95863,0.93405,0.95863,0.02458,1.8617,independent
+4556,persistence,1,0.99937,0.95553,0.99937,0.04383,0.0,collapsed
+4556,seasonal_naive,0,0.76656,0.76656,0.76139,-0.00517,2.4654,independent
+4556,harmonic_arima,1,0.98472,0.96375,0.98472,0.02097,0.8586,independent
+4556,lightgbm,1,0.95409,0.93056,0.95409,0.02352,2.2644,independent
+4556,lstm,1,0.96236,0.94554,0.96236,0.01682,1.9356,independent

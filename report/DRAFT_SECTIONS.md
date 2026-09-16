@@ -2,7 +2,7 @@
 
 > **Status: first draft, to be rewritten in the author's own voice.**
 > Every number here traces to `report/RESULTS_SUMMARY.md` and the artefacts under
-> `report/tables/`. Sections not present below are blocked on Phases 4–6.
+> `report/tables/`. All sections are drafted; none are blocked.
 
 ---
 
@@ -493,6 +493,372 @@ with MAE, RMSE and MAPE reported per area.
 
 ---
 
+# 4. Methodology
+
+## 4.1 Problem definition and evaluation protocol
+
+The task is one-step-ahead forecasting: given observations up to interval *t−1*, predict
+the internet activity at interval *t*, ten minutes later. Models are univariate and
+fitted per area, at the data's native 10-minute resolution.
+
+Every reported forecast is produced by walk-forward inference with **true observed
+history**. The model predicts *t* from real observations up to *t−1*, then the real
+observation at *t* is revealed before *t+1* is predicted. This is not a recursive
+rollout, in which a model would be fed its own predictions; that would measure
+multi-step error under a one-step-ahead heading. `src/models/base.py` provides the single
+`walk_forward` path used for all reported results, and the batched implementations used
+by LightGBM and the LSTM are asserted equal to the step-by-step loop in
+`tests/test_models.py`.
+
+The period is split chronologically, never randomly, because random splits on a time
+series place future observations in the training set:
+
+| Split | Dates (Europe/Rome) | Points | Purpose |
+|---|---|---:|---|
+| train | 1 Nov – 8 Dec 2013 | 5,472 | Model fitting; every transform fitted here only |
+| validation | 9 – 15 Dec 2013 | 1,008 | Hyperparameter selection |
+| test | 16 – 22 Dec 2013 | 1,008 | Reported results |
+| stress | 23 Dec 2013 – 1 Jan 2014 | 1,440 | Failure analysis only; never tuned on |
+
+Transforms are fitted on the training split alone. `LogStandardScaler` raises
+`LeakageError` if asked to refit, so leakage fails loudly rather than silently degrading
+into an optimistic result.
+
+## 4.2 Metrics
+
+MAE, RMSE, MAPE, sMAPE, R² and MASE are reported. MASE is the metric used for
+cross-area comparison, following Hyndman and Koehler [10], because the three areas differ
+by roughly an order of magnitude in volume: an MAE of 83.6 on square 5161 and 13.6 on
+square 4159 say nothing about which was forecast better. MASE scales each error by the
+in-sample naive error of that area's own training split, so a value below 1 means the
+model beats a naive forecast and values are comparable across areas.
+
+The MASE denominator is computed on the **training** series in every case, including when
+scoring the validation, test and stress splits. Scaling by the window being scored would
+let an easy week flatter a model.
+
+## 4.3 Baselines
+
+Two baselines appear in every results table.
+
+**Persistence** predicts `x̂(t) = x(t−1)`. This is not a straw man. The exploratory
+analysis measured a lag-1 autocorrelation of 0.987, and persistence achieves MASE 0.195
+to 0.267 across the three test-week areas with R² above 0.94. It is the bar that decides
+whether any model's complexity was worth paying for.
+
+**Seasonal naive** predicts `x̂(t) = x(t−144)`, the same interval one day earlier. It
+tests whether the daily cycle alone is sufficient.
+
+## 4.4 The three models
+
+Each model was chosen for a stated reason rather than to fill a category.
+
+**Dynamic harmonic regression** (SARIMAX with Fourier terms, `src/models/harmonic_arima.py`).
+Plain SARIMA cannot represent two seasonal periods simultaneously, and a seasonal period
+of *s* = 144 is computationally intractable in any case. Fourier terms for the daily
+(144) and weekly (1,008) periods enter as exogenous regressors while an ARIMA process
+models the error. The periodogram found a 12-hour component alongside the 24-hour one,
+which requires at least two daily harmonics, so the search began at K₁ = 2. Both
+stationarity tests agreed the series has no unit root, so *d* was held at 0 throughout;
+differencing would have removed signal.
+
+**LSTM** (`src/models/lstm.py`). The only model in the comparison that assumes nothing
+about seasonal form. The harmonic regression is told the cycle explicitly and LightGBM is
+told which lags to examine; the LSTM sees a raw window and must find whatever structure
+is there. It is therefore the only candidate for the behaviour the decomposition could
+not remove — a residual that is still 3.6% of variance and strongly heteroscedastic.
+
+**LightGBM** (`src/models/gbm.py`). Gradient-boosted trees won the M5 competition, with
+LightGBM the most-used model among winning entries [8], [9]. Santos *et al.* [4]
+evaluated Random Forest and Decision Tree on this dataset but not boosting, so this is
+also the gap the present study occupies. Its lag features were chosen from the measured
+autocorrelation rather than convention: the ACF has local maxima at every multiple of the
+daily period, and lag 1 is the strongest single predictor at 0.987.
+
+## 4.5 Tuning protocol
+
+Tuning ran on the highest-traffic area only (square 5161), selecting on validation MAE.
+Search proceeded one axis at a time, carrying the winner forward, so that each decision
+is attributable: a single joint search would produce a configuration with nothing to say
+about *why* any setting was chosen beyond that an optimiser preferred it.
+
+Three deviations from the staged pattern, each for a reason:
+
+- **Harmonic orders were selected by AICc**, not validation error, because refitting and
+  walk-forwarding 15 candidates costs far more than an information criterion computed
+  in-sample, and AICc is the standard criterion for exactly this choice.
+- **LightGBM used Optuna** over 30 trials, because `num_leaves`, `min_child_samples` and
+  the sampling fractions trade off against one another; a staged sweep would fix each at
+  a value chosen while the others were wrong.
+- **The LSTM used five staged sweeps** over sequence length, capacity, optimisation,
+  regularisation, and a calendar-feature ablation.
+
+Every candidate — 101 in total — appends a row to `results/experiments.csv` carrying its
+hyperparameters, validation metrics, wall time, parameter count, the git commit, and a
+non-empty `rationale_for_next_change` describing what the comparison implied for the next
+step. The log is append-only.
+
+Selected configurations:
+
+| Model | Selection |
+|---|---|
+| harmonic ARIMA | K₁ = 6, K₂ = 2 Fourier orders; ARIMA(3, 0, 1) |
+| LightGBM | 68 leaves, learning rate 0.034, 320 trees after early stopping |
+| LSTM | window 144, 128 hidden × 2 layers, batch 32, dropout 0.0, weight decay 1e-4 |
+
+## 4.6 Final fits
+
+Once hyperparameters are selected the validation split has done its job, and withholding
+it would discard a week of data the model is entitled to learn from. The final fit
+therefore uses train + validation, and the test week is untouched until prediction.
+
+This creates a problem for the two models that stop early, because no held-out set
+remains. Refitting with early stopping against the test week would be leakage; refitting
+with no stopping rule would overfit. The resolution is to carry the **complexity** found
+during tuning rather than the stopping rule: the LSTM trains for the epoch count that was
+best on validation with patience disabled, and LightGBM uses the 320 trees early stopping
+chose. Both numbers were fixed before the final fit and without seeing test data.
+
+The LSTM is run over **three seeds** and reported as mean ± standard deviation, because a
+single seed reports one draw from a distribution and the spread here proves comparable to
+the differences between models.
+
+## 4.7 Two quantities that are easy to confuse
+
+The results tables report the LSTM twice, and the distinction matters.
+
+- **`lstm`** is the mean of the three seeds' errors: what one typical trained model does.
+- **`lstm_ensemble`** is the error of the three seeds' *averaged forecast*, which is a
+  different and better forecast. Averaging predictions cannot increase absolute error.
+
+The saved prediction series — and therefore every figure — contains the averaged
+forecast, so both rows are reported and the ensemble's cost is stated as three fits of
+training, three passes of inference and three times the parameters.
+
+---
+
+# 5. Results
+
+## 5.1 Accuracy on the test week
+
+MASE on the test week, 16–22 December 2013. Lower is better; 1.0 is the in-sample naive
+forecast.
+
+| Model | 5161 | 4159 | 4556 | mean |
+|---|---:|---:|---:|---:|
+| **harmonic ARIMA** | 0.241 | **0.166** | **0.230** | **0.213** |
+| LightGBM | 0.249 | 0.186 | 0.267 | 0.234 |
+| persistence | 0.267 | 0.195 | 0.257 | 0.240 |
+| LSTM (3-seed ensemble) | **0.233** | 0.253 | 0.249 | 0.245 |
+| LSTM (mean of 3 seeds) | 0.265 | 0.259 | 0.257 | 0.260 |
+| seasonal naive | 0.975 | 0.626 | 0.680 | 0.760 |
+
+The dynamic harmonic regression has the best mean MASE and the best result on two of the
+three areas, improving on persistence by 11.3% averaged across areas. On square 5161 the
+three-seed LSTM ensemble is better still, at 0.233 against the harmonic model's 0.241.
+
+Averaged across areas, **only two of the three models beat persistence**: harmonic ARIMA
+and LightGBM. Both LSTM variants have a worse mean MASE than repeating the last
+observation. Seasonal naive is far worse than every alternative, which establishes that
+the daily cycle alone is not a sufficient forecast at this resolution.
+
+The harmonic model achieves this with **22 parameters**, against 19,639–21,010 for
+LightGBM and 202,369 for a single LSTM. Ranking by parameter count inverts the ranking by
+accuracy. (LightGBM's count is the total number of leaves in its ensemble, which is the
+closest honest analogue to a parameter count for a tree model; unlike the other two it
+varies by area, because it depends on the data fitted rather than on the architecture.)
+
+## 5.2 Seed variance
+
+The three-seed protocol is load-bearing rather than ceremonial. On square 4159 the LSTM
+scores 21.16 ± 4.59 MAE, a relative standard deviation of 22%. On square 4556 it scores
+28.85 ± 1.79 against persistence's 28.86 — a difference far smaller than the spread, so
+the two are not distinguishable. A single-seed result would have been a number with no
+interpretation attached.
+
+## 5.3 Computational cost
+
+Square 5161, 1,008 one-step forecasts. Training times are **not comparable across
+devices**, which is why the device is carried in the table rather than left to a caption.
+
+| Model | Device | Train | Inference | Per step | Parameters |
+|---|---|---:|---:|---:|---:|
+| harmonic ARIMA | CPU | 18.0 s | 75.2 s | 74.6 ms | 22 |
+| LightGBM | CPU | 5.0 s | 0.022 s | 0.022 ms | 19,639 |
+| LSTM | GPU (T4) | 9.9 s | 0.041 s | 0.041 ms | 202,369 |
+| LSTM ensemble | GPU (T4) | 29.7 s | 0.124 s | 0.123 ms | 607,107 |
+
+**Cost inverts between training and deployment.** The most accurate and by far the
+smallest model is also the most expensive to serve: harmonic ARIMA is roughly
+**1,825× slower per forecast** than the LSTM, because `append(refit=False)` still runs a
+Kalman filter update at every step. For a single area this does not disqualify it: 75
+seconds to produce a week of forecasts is comfortably inside a ten-minute budget.
+
+It does disqualify it at city scale. Producing one forecast for each of the 10,000 grid
+cells would take **12.4 minutes** at 74.6 ms per step — longer than the ten-minute
+interval being forecast, so the model could not keep up with the data in real time. The
+LSTM would need 0.41 seconds for the same pass. The accuracy ranking and the
+deployability ranking are therefore opposites.
+
+The LSTM's training cost depends on hardware to a degree that changes what is feasible.
+For one configuration fitted on both machines — window 288, 64 hidden units, 2 layers —
+the same fit took **2,019 seconds on the CPU and 2.6 seconds on the T4**, a measured
+777× difference. The largest configuration reached during the CPU sweep took **13.8
+hours** for a single fit; its GPU counterpart was never run, so that figure is a CPU cost
+rather than half of a ratio. The sweep as a whole was abandoned locally after 16 hours
+with two of five stages complete, and finished on the GPU in 2.9 minutes.
+
+A 288-step recurrence is latency-bound on a sequential dependency that CPU threads cannot
+divide: the process held an average of 0.88 of 8 available cores throughout. More cores
+would not have helped.
+
+---
+
+# 6. Discussion
+
+## 6.1 Did the models learn anything, or copy the last value?
+
+With a lag-1 autocorrelation of 0.987 a model can achieve a respectable error by learning
+to repeat its most recent input, and would appear successful while having learned
+nothing. This was tested explicitly.
+
+The measure used is the **copy ratio**: the mean distance between a model's forecasts and
+the persistence baseline, divided by how far the series itself moves between steps. Zero
+means the two are the same forecast.
+
+| Model | copy ratio (test week, range across areas) | verdict |
+|---|---|---|
+| persistence | 0.00 | collapsed by definition |
+| harmonic ARIMA | 0.54 – 0.64 | independent |
+| LSTM | 0.71 – 1.14 | independent |
+| LightGBM | 0.77 – 0.93 | independent |
+
+**No model collapsed to persistence.** The closest is harmonic ARIMA on square 4159 at
+0.54, which is also its best result — the model is genuinely close to persistence there,
+and it beats it.
+
+One methodological point is worth stating, because the obvious test gives the wrong
+answer. Cross-correlating forecasts against observations, every model — including the
+best — peaks at **lag +1**. This is not evidence of copying. A one-step forecast is
+constructed only from observations up to *t−1*, so it cannot contain the innovation at
+*t*, and must correlate slightly more strongly with the previous observation than with
+the current one. A forecast peaking at lag 0 on a series this persistent would be the
+suspicious case, because it would imply access to the present value. The measured data
+settles the question: seasonal naive is the only model peaking at lag 0, and it is
+comfortably the worst forecaster in the study.
+
+## 6.2 Where the errors fall
+
+Absolute error scales with traffic level, so every model's error follows the diurnal
+cycle. What distinguishes the models is where their error peaks *relative* to the others.
+
+**The LSTM's poor result on square 4159 is a weekday-morning failure, not a general one.**
+Its three worst six-hour windows all begin at approximately 09:50 on consecutive weekdays
+(17, 18 and 19 December), at 2.0 to 2.6 times the persistence error over the same
+stretches. Its weekday MAE of 24.13 against a weekend MAE of 12.03 is the most lopsided
+split of any model — persistence, by comparison, sits at 17.41 and 12.31. The model
+misses the morning ramp on the area with the least traffic.
+
+**Harmonic ARIMA's advantage on square 5161 is weekday-specific in the opposite
+direction.** It is the best model of any on weekdays (74.96 MAE) but worse than
+persistence at weekends (105.33 against 103.90), a weekend penalty of 1.41. Its overall
+win on that area is earned entirely on working days.
+
+Calendar features are worth having: the LSTM ablation measured a 14.7% improvement in
+validation MAE with them against without.
+
+## 6.3 The holiday stress split
+
+The stress split covers 23 December to 1 January, contains four of the eight Italian
+public holidays in the study period, and was never tuned on or used for selection.
+
+| Model | 5161 | 4159 | 4556 |
+|---|---:|---:|---:|
+| persistence | 0.198 | 0.124 | 0.206 |
+| harmonic ARIMA | +9.0% | **−1.9%** | +7.9% |
+| LightGBM | +68.6% | +133.1% | +139.8% |
+| LSTM | +78.0% | +95.8% | +103.2% |
+
+*(percentages relative to persistence on the same area; negative is better)*
+
+**Persistence wins outright on two of the three areas.** Both learned models degrade
+severely — LightGBM by up to 140% and the LSTM by up to 103% — while the harmonic model
+stays within 9% and beats persistence on one area.
+
+The two baselines also move in **opposite directions**, which isolates what the holidays
+do to the series. Persistence gets easier (MASE 0.267 → 0.198 on square 5161) because the
+traffic becomes smoother, while seasonal naive collapses past MASE 1.0 (0.975 → 1.266) —
+worse than the in-sample naive forecast it is normalised against — because the weekly
+pattern it depends on is precisely what Christmas and New Year destroy.
+
+LightGBM's failure was **predicted before the split was run**. The model's documentation
+states that a tree ensemble cannot extrapolate beyond the range of its training targets,
+and identifies the stress split as where that limitation should bite. It is the worst
+non-seasonal-naive model on all three areas, with R² falling to 0.474 on square 4159
+against persistence's 0.878.
+
+## 6.4 Limitations
+
+1. **Hyperparameters were tuned on one area only.** The LSTM's failure on square 4159 is
+   partly a *transfer* result: it inherited a configuration and epoch count selected on
+   the highest-traffic area. Per-area tuning was outside the compute budget, so the
+   evidence does not separate architectural limitation from transfer failure.
+2. **One test week.** The reported results rest on a single seven-day window fixed by the
+   brief. The stress split provides a second, deliberately harder window, but neither is
+   a substitute for repeated evaluation across many weeks.
+3. **The staged search is not device-invariant.** Run on CPU the LSTM sweep selected a
+   sequence length of 288; run on a T4 it selected 144, because a candidate that stopped
+   at epoch 17 on one device stopped at epoch 2 on the other. Different kernels give
+   different numerics, and early stopping with patience 5 on a noisy validation curve
+   turns that into a different architectural choice. The selection should not be
+   presented as inevitable.
+4. **Three areas.** The study areas are the highest-traffic cell and two others chosen for
+   contrast; conclusions about area characteristics rest on three points.
+5. **Univariate.** No cross-cell or exogenous information (weather, events) is used,
+   though the anomaly analysis showed holidays carry a measurable effect.
+
+---
+
+# 7. Conclusion
+
+Three sequential models were compared for one-step-ahead forecasting of mobile internet
+traffic across three areas of Milan, against persistence and seasonal-naive baselines.
+
+The **dynamic harmonic regression performs best**, with the lowest mean MASE (0.213) and
+the best result on two of three test-week areas, improving on persistence by 11.3%. It
+does so with 22 parameters, against LightGBM's 19,639 and the LSTM's 202,369. On the
+remaining area a three-seed LSTM ensemble is better, so no single model dominates.
+
+Three findings are worth carrying forward.
+
+**Complexity bought accuracy only while the distribution held still.** On the held-out
+holiday period persistence wins two of three areas outright, and both learned models
+degrade by 69–140% while the smallest model stays within 9%. The ranking obtained on the
+test week does not survive a distribution shift.
+
+**The baseline is the result.** With lag-1 autocorrelation at 0.987, persistence achieves
+MASE 0.195–0.267 and R² above 0.94, and only two of three models beat it on average. A
+study reporting only model errors, without that floor, would present a respectable-looking
+result that is worse than doing nothing.
+
+**Cost inverts between training and deployment.** The most accurate and smallest model is
+roughly 1,825× the most expensive to serve, and at city scale it could not keep pace with
+the interval it forecasts. The LSTM, meanwhile, is only trainable in reasonable time on a
+GPU: an identical fit took 2,019 seconds on a CPU against 2.6 seconds on a T4. Reporting a
+single "training time" column without the device attached would have been meaningless.
+
+## Future work
+
+- **Per-area tuning**, to separate the LSTM's architectural limits from transfer failure.
+- **Multi-step horizons.** Every conclusion here is about a ten-minute horizon, where
+  persistence is strong; the ranking would likely change at one hour or one day.
+- **Holiday-aware features or a regime-switching model**, since the failure on the stress
+  split is specific and predictable rather than random.
+- **Cross-cell information.** Neighbouring cells are highly correlated, and a spatial or
+  graph model could use what the univariate setting discards.
+
+---
+
 ## Notes for revision
 
 - **Figure numbering** assumes Figures 1–8 map to `report/figures/01`–`08` in order; renumber if
@@ -503,3 +869,11 @@ with MAE, RMSE and MAPE reported per area.
   landmark distances establish where each cell is, not what drives its traffic, and the
   text says so.
 - **The AI-use disclosure required by the brief is not yet written.**
+- **Sections 4–7 were added after Phase 6.** They are the sections most in need of
+  rewriting in the author's voice, since the brief warns explicitly against
+  AI-generated reports and a viva may ask the author to defend the reasoning.
+- **Section 6.1** makes a methodological argument (a lag-1 cross-correlation peak is
+  what a causal one-step forecast looks like, not evidence of copying) that is worth
+  keeping, because the obvious reading of that diagnostic is the wrong one.
+- **Section 6.4 limitation 3** is uncomfortable but should stay: the LSTM's selected
+  architecture depends on the device the search ran on.
