@@ -259,19 +259,28 @@ def rebuild_ensemble_rows(
     areas = SelectedAreas.load(config.paths.tables / "selected_areas.json")
     rebuilt: list[FinalResult] = []
 
+    # Read the combined table rather than the per-area ones. It is the single
+    # source of truth, and reading a per-area file here made the rebuild
+    # unable to repair a per-area file that was itself damaged.
+    combined_path = config.paths.tables / f"final_metrics_all_{split_name}.csv"
+    if not combined_path.exists():
+        return rebuilt
+    with combined_path.open(encoding="utf-8", newline="") as fh:
+        all_rows = list(csv.DictReader(fh))
+
     for square_id in areas.forecast:
         predictions_path = config.paths.predictions / f"{split_name}_area_{square_id}.parquet"
-        table_path = config.paths.tables / f"final_metrics_area_{square_id}_{split_name}.csv"
-        if not predictions_path.exists() or not table_path.exists():
+        if not predictions_path.exists():
             continue
 
         frame = pl.read_parquet(predictions_path)
         if model not in frame.columns:
             continue
 
-        with table_path.open(encoding="utf-8", newline="") as fh:
-            rows = list(csv.DictReader(fh))
-        member_row = next((r for r in rows if r["model"] == model), None)
+        member_row = next(
+            (r for r in all_rows if r["model"] == model and int(r["square_id"]) == int(square_id)),
+            None,
+        )
         if member_row is None or int(member_row["n_seeds"]) < 2:
             continue
 
@@ -463,16 +472,21 @@ def _write_rows(rows: list[dict[str, Any]], config: Config, split_name: str) -> 
     """Write the metric and timing tables from already-assembled rows."""
     written: list[Path] = []
 
+    # Keys are coerced because rows arrive from two sources: to_row() gives an
+    # int square_id, csv.DictReader gives the string. Grouped as they come, the
+    # two land in different buckets that format to the *same* filename, and
+    # whichever is written second silently replaces the other -- which is how a
+    # rebuild of one ensemble row erased the five model rows beside it.
     by_area: dict[int, list[dict[str, Any]]] = {}
     for row in rows:
-        by_area.setdefault(row["square_id"], []).append(row)
+        by_area.setdefault(int(row["square_id"]), []).append(row)
 
     for square_id, area_rows in by_area.items():
         path = config.paths.tables / f"final_metrics_area_{square_id}_{split_name}.csv"
         with path.open("w", newline="", encoding="utf-8") as fh:
             writer = csv.DictWriter(fh, fieldnames=list(area_rows[0]))
             writer.writeheader()
-            writer.writerows(sorted(area_rows, key=lambda r: r["mase"]))
+            writer.writerows(sorted(area_rows, key=lambda r: float(r["mase"])))
         written.append(path)
 
     path = config.paths.tables / f"final_metrics_all_{split_name}.csv"

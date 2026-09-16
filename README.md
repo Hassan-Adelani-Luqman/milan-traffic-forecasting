@@ -126,8 +126,10 @@ python run.py pipeline   # stream download -> ingest -> delete (what Kaggle runs
 python run.py benchmark  # compare ingest strategies in isolated processes
 python run.py matrix     # assemble the 8928 x 10000 matrix
 python run.py eda        # exploratory figures, statistics, selected series
-python run.py train      # train and tune the three models
-python run.py evaluate   # test-week metrics, plots and diagnostics
+python run.py train      # tune the three models (--models to select a subset)
+python run.py final      # refit on train+validation, evaluate on the test week
+python run.py results    # evaluation figures, diagnostics, failure analysis
+python run.py evaluate   # baseline metrics for any split
 python run.py all        # everything above, in order
 ```
 
@@ -139,9 +141,36 @@ python run.py ingest --config config/kaggle.yaml --limit 3
 
 ### Reproducing results without the 20 GB download
 
-_Pending (Phase 7)._ `data/processed/selected_series.parquet` — the five extracted
-series, a few hundred KB — is committed to this repository specifically so the
-modelling and evaluation stages reproduce without touching the raw dataset.
+Four artefacts are committed so that everything after ingest reproduces from a clean
+clone: `data/processed/selected_series.parquet` (the extracted series, 283 KB),
+`results/tables/selected_areas.json`, `results/tables/selected_hyperparameters.json`,
+and `results/predictions/*.parquet` (the forecasts, 312 KB).
+
+```bash
+git clone <this repo> && cd milan-traffic-forecasting
+python -m venv .venv && .venv/Scripts/activate      # source .venv/bin/activate on Linux
+pip install -r requirements.txt
+
+python run.py test                     # 458 tests, ~7 min
+python run.py evaluate --split test    # baseline metrics from the committed series
+python run.py results --split test     # 28 figures + 6 tables from the committed forecasts
+python run.py results --split stress   # the same for the holiday split
+```
+
+Verified end to end: a fresh clone into an empty virtualenv reproduces every reported
+metric **exactly**, not merely to 3 significant figures.
+
+What this path cannot do, and why:
+
+| Stage | Needs | Why it is excluded |
+|---|---|---|
+| `download`, `ingest`, `matrix` | 19.4 GiB of raw CDR text | Not redistributable; `data/raw/` is gitignored |
+| parts of `eda` | `traffic_matrix.npy` (341 MB) | Derived from the raw text, too large to commit |
+| `final` (LSTM rows) | a CUDA device | On CPU the nine LSTM fits take roughly 31 hours |
+
+The committed prediction series exist precisely because of that last row: the LSTM
+columns cannot be regenerated on a CPU in reasonable time, so without them the figures
+could not be redrawn from a clean clone.
 
 ---
 
@@ -204,12 +233,79 @@ to the OS and whichever ran first paid for the heap growth.
 
 ## Methodology
 
-_Pending (Phases 3–5)._ Model line-up, input representation and tuning protocol are
-documented here once Phase 5 completes.
+One-step-ahead (10 minute) forecasting, univariate, one model per area, at the data's
+native resolution. Inference is always `walk_forward` with true observed history — not a
+recursive rollout — so each forecast uses real observations up to the step before the one
+it predicts.
+
+**Three models, each chosen for a stated reason.**
+
+| Model | Why it is here | Params |
+|---|---|---:|
+| Dynamic harmonic regression | SARIMAX with Fourier terms. Plain SARIMA cannot express two seasonalities at once and s=144 is intractable. | 22 |
+| LSTM | The only candidate that assumes nothing about seasonal form. | 202,369 |
+| LightGBM | Gradient boosting won M5; prior work on this dataset evaluated random forests but not boosting. | 19,639 |
+
+**Two baselines appear in every table.** With a lag-1 autocorrelation of 0.987,
+persistence is not a straw man — it is the bar that decides whether complexity earned
+its place.
+
+**Tuning** ran on the highest-traffic area only, selecting on validation MAE, one axis at
+a time so each decision is attributable. Harmonic order was chosen by AICc (refitting 15
+candidates through walk-forward would have cost far more than an information criterion);
+LightGBM used Optuna over 30 trials because tree parameters interact too strongly for a
+staged sweep; the LSTM used five staged sweeps. Every candidate — 101 in total — appends a
+row to `results/experiments.csv` with the reasoning that produced the next change.
+
+**The final fit uses train + validation**, since the validation split has done its job by
+then. Neither early-stopping model has a held-out set left, so each carries the
+*complexity* tuning chose rather than the stopping rule: the LSTM trains for its best
+epoch count with patience disabled, LightGBM uses its selected 320 trees. The LSTM is run
+over three seeds and reported as mean ± standard deviation.
 
 ## Results
 
-_Pending (Phase 6)._
+Test week, 16–22 Dec 2013. MASE is the comparable metric: the areas differ by an order of
+magnitude in volume, so raw MAE cannot be compared across them.
+
+| Model | 5161 | 4159 | 4556 | mean |
+|---|---:|---:|---:|---:|
+| **harmonic ARIMA** | 0.241 | **0.166** | **0.230** | **0.213** |
+| LightGBM | 0.249 | 0.186 | 0.267 | 0.234 |
+| persistence | 0.267 | 0.195 | 0.257 | 0.240 |
+| LSTM (3-seed ensemble) | **0.233** | 0.253 | 0.249 | 0.245 |
+| LSTM (mean of 3 seeds) | 0.265 | 0.259 | 0.257 | 0.260 |
+| seasonal naive | 0.975 | 0.626 | 0.680 | 0.760 |
+
+**The 22-parameter model wins.** Harmonic ARIMA has the best mean MASE and wins two of
+three areas; a three-seed LSTM ensemble takes the third. Averaged across areas, only
+harmonic ARIMA and LightGBM beat persistence — both LSTM variants do not.
+
+**Complexity did not survive the holidays.** On the held-out stress split (23 Dec – 1 Jan,
+never tuned on) persistence wins outright on two of three areas, while LightGBM degrades
+by 69–140% and the LSTM by 78–103%. Harmonic ARIMA stays within 9%. This confirms a
+prediction written into `src/models/gbm.py` before the split was ever run: a tree ensemble
+cannot extrapolate beyond the range of its training targets, and a holiday period is
+exactly where that bites.
+
+**Cost inverts between training and inference** (square 5161, 1,008 forecasts):
+
+| Model | Device | Train | Inference | Per step |
+|---|---|---:|---:|---:|
+| harmonic ARIMA | CPU | 18.0 s | 75.2 s | 74.6 ms |
+| LightGBM | CPU | 5.0 s | 0.022 s | 0.022 ms |
+| LSTM | GPU (T4) | 9.9 s | 0.041 s | 0.041 ms |
+
+The cheapest model to train is by far the most expensive to serve: `append(refit=False)`
+still runs a Kalman update per step, making harmonic ARIMA ~1,800× slower at inference
+than the LSTM. Training times are not comparable across devices, which is why every
+results and timing table carries a `device` column. On a CPU a single LSTM fit at the
+tuned size took 13.8 hours against 2.6 seconds on a T4 — a 776× difference measured on
+identical configuration.
+
+**No model collapsed to persistence.** With lag-1 autocorrelation at 0.987 this was a real
+risk, so it was tested two ways and reported either way; copy ratios run 0.54–1.14 against
+persistence's 0.00. See `results/tables/copying_test.csv`.
 
 ---
 

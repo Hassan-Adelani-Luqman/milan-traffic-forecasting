@@ -360,8 +360,15 @@ def test_committed_tables_carry_an_ensemble_row_matching_the_predictions() -> No
 
     with path.open(encoding="utf-8", newline="") as fh:
         rows = {r["model"]: r for r in _csv.DictReader(fh)}
-    if "lstm" not in rows or int(rows["lstm"]["n_seeds"]) < 2:
-        pytest.skip("no multi-seed model in this table")
+
+    # Asserted, not skipped. Skipping when the table looked incomplete is what
+    # let a rebuild that erased five of the six rows reach a commit looking
+    # green: the file was there, the row simply was not.
+    assert {"persistence", "seasonal_naive", "harmonic_arima", "lightgbm", "lstm"} <= set(rows), (
+        f"per-area table is missing models; it holds only {sorted(rows)}. "
+        "Regenerate with `python -m src.final_runs --rebuild-ensemble`."
+    )
+    assert int(rows["lstm"]["n_seeds"]) >= 2
 
     assert "lstm_ensemble" in rows, (
         "predictions hold the seed-averaged LSTM series but no lstm_ensemble row "
@@ -371,3 +378,65 @@ def test_committed_tables_carry_an_ensemble_row_matching_the_predictions() -> No
     frame = pl.read_parquet(parquet)
     recomputed = float((frame["observed"] - frame["lstm"]).abs().mean())
     assert recomputed == pytest.approx(float(rows["lstm_ensemble"]["mae"]), abs=0.01)
+
+
+def test_rebuilding_preserves_every_row_in_the_per_area_table(tmp_path) -> None:
+    """Regression: rows from CSV and from to_row() must group together.
+
+    to_row() gives an int square_id and csv.DictReader gives the string. Keyed
+    as they arrive the two form separate groups that format to the *same*
+    per-area filename, so the group written second replaced the first -- and a
+    rebuild that appended one ensemble row erased the five model rows beside
+    it while leaving the combined table intact.
+    """
+    import csv as _csv
+    import dataclasses
+
+    from src.config import load_config
+    from src.final_runs import _write_rows
+
+    config = load_config(auto_env=False)
+    staged = tmp_path / "results"
+    (staged / "tables").mkdir(parents=True)
+    config = dataclasses.replace(config, paths=dataclasses.replace(config.paths, results=staged))
+
+    def _row(square_id, model, mase):
+        return {
+            "square_id": square_id,
+            "model": model,
+            "split": "test",
+            "n_seeds": 1,
+            "mae": 1.0,
+            "mae_std": 0.0,
+            "rmse": 1.0,
+            "rmse_std": 0.0,
+            "mape": 1.0,
+            "smape": 1.0,
+            "mase": mase,
+            "mase_std": 0.0,
+            "r2": 0.9,
+            "bias": 0.0,
+            "n_params": 0,
+            "device": "cpu",
+            "lag1_copy_ratio": 0.5,
+            "train_wall_s": 0.0,
+            "train_wall_std": 0.0,
+            "inference_wall_s": 0.0,
+            "inference_ms_per_step": 0.0,
+        }
+
+    # Strings as a CSV read would give them, ints as to_row() gives them.
+    rows = [
+        _row("5161", "persistence", "0.27"),
+        _row("5161", "harmonic_arima", "0.24"),
+        _row(5161, "lstm_ensemble", 0.23),
+    ]
+    _write_rows(rows, config, "test")
+
+    with (staged / "tables" / "final_metrics_area_5161_test.csv").open(
+        encoding="utf-8", newline=""
+    ) as fh:
+        written = [r["model"] for r in _csv.DictReader(fh)]
+
+    assert set(written) == {"persistence", "harmonic_arima", "lstm_ensemble"}
+    assert written[0] == "lstm_ensemble"  # sorted by MASE, best first
