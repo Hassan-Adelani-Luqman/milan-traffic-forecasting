@@ -161,9 +161,7 @@ def test_evaluate_all_writes_a_table_per_area(config, splits, tmp_path) -> None:
     shutil.copy2(
         config.paths.tables / "selected_areas.json", staged / "tables" / "selected_areas.json"
     )
-    config = dataclasses.replace(
-        config, paths=dataclasses.replace(config.paths, results=staged)
-    )
+    config = dataclasses.replace(config, paths=dataclasses.replace(config.paths, results=staged))
 
     results = evaluate_all(config, split_name="test")
     assert len(results) == 3

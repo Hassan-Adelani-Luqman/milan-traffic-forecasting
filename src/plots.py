@@ -27,6 +27,12 @@ __all__ = [
     "plot_acf_pacf",
     "plot_rolling_stats",
     "plot_periodogram",
+    "plot_forecast",
+    "plot_error_heatmap",
+    "plot_error_by_hour",
+    "plot_residual_acf",
+    "plot_cross_correlation",
+    "plot_cross_area_mase",
 ]
 
 # Colour-blind safe, distinguishable in greyscale print.
@@ -342,5 +348,258 @@ def plot_periodogram(spectrum: dict[str, Any], *, max_period_hours: float = 200.
     axis.set_xlabel("period (hours, log scale)")
     axis.set_ylabel("spectral power")
     axis.set_title("Periodogram: which cycles carry the variance")
+    fig.tight_layout()
+    return fig
+
+
+# --------------------------------------------------------------------------
+# Forecast evaluation
+# --------------------------------------------------------------------------
+
+
+def plot_forecast(
+    times: np.ndarray,
+    observed: np.ndarray,
+    predicted: np.ndarray,
+    *,
+    model: str,
+    square_id: int,
+    persistence: np.ndarray | None = None,
+    zoom_days: int = 1,
+    daily_period: int = 144,
+):
+    """A forecast over the full window, with one day enlarged beneath it.
+
+    The full week shows whether the level and seasonal shape are right. At that
+    width a one-step lag is invisible, because a week of 10-minute data is 1,008
+    points drawn across a few hundred pixels, and every model looks like the
+    observed series. The zoomed panel is where copying becomes visible to the
+    eye, which is why it is part of the same figure rather than an optional
+    extra.
+
+    Args:
+        times: Local timestamps for the evaluation window.
+        observed: True values.
+        predicted: Forecasts aligned to ``observed``.
+        model: Model name, for the title.
+        square_id: Area identifier, for the title.
+        persistence: Baseline forecasts to overlay on the zoom panel.
+        zoom_days: How many days the lower panel covers.
+        daily_period: Steps per day.
+
+    Returns:
+        The figure.
+    """
+    observed = np.asarray(observed, dtype=np.float64)
+    predicted = np.asarray(predicted, dtype=np.float64)
+    fig, (top, bottom) = _figure(2, 1, figsize=(12, 6.5))
+
+    top.plot(times, observed, lw=1.0, color="#333333", label="observed")
+    top.plot(times, predicted, lw=1.0, color=_SERIES_COLOURS[1], alpha=0.85, label=model)
+    top.set_ylabel("internet activity")
+    top.set_title(f"{model}, square {square_id} - full evaluation window")
+    top.legend(fontsize=9, ncol=2)
+
+    # The busiest day is the informative one: absolute errors scale with level,
+    # so a quiet day would make every model look equally good.
+    n_days = max(1, observed.size // daily_period)
+    totals = [observed[d * daily_period : (d + 1) * daily_period].sum() for d in range(n_days)]
+    peak_day = min(int(np.argmax(totals)), max(0, n_days - zoom_days))
+    window = slice(peak_day * daily_period, (peak_day + zoom_days) * daily_period)
+
+    bottom.plot(times[window], observed[window], lw=1.4, color="#333333", label="observed")
+    bottom.plot(times[window], predicted[window], lw=1.4, color=_SERIES_COLOURS[1], label=model)
+    if persistence is not None:
+        bottom.plot(
+            times[window],
+            np.asarray(persistence)[window],
+            lw=1.0,
+            ls="--",
+            color=_SERIES_COLOURS[2],
+            alpha=0.9,
+            label="persistence",
+        )
+    bottom.set_ylabel("internet activity")
+    bottom.set_xlabel("local time (Europe/Rome)")
+    bottom.set_title("Busiest day enlarged: a one-step lag is only visible at this scale")
+    bottom.legend(fontsize=9, ncol=3)
+
+    fig.tight_layout()
+    return fig
+
+
+def plot_error_heatmap(heatmap: dict[str, Any], *, model: str, square_id: int):
+    """Mean absolute error over day-of-week by hour-of-day.
+
+    Args:
+        heatmap: Output of :func:`src.diagnostics.error_heatmap`.
+        model: Model name, for the title.
+        square_id: Area identifier.
+
+    Returns:
+        The figure.
+    """
+    grid = np.asarray(heatmap["grid"], dtype=np.float64)
+    fig, axis = _figure(figsize=(11, 3.6))
+
+    image = axis.imshow(grid, aspect="auto", origin="upper", cmap="magma")
+    axis.set_yticks(range(7))
+    axis.set_yticklabels(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
+    axis.set_xticks(range(0, 24, 2))
+    axis.set_xticklabels([f"{h:02d}" for h in range(0, 24, 2)])
+    axis.set_xlabel("hour of day (Europe/Rome)")
+    axis.set_title(f"{model}, square {square_id} - mean absolute error")
+
+    bar = fig.colorbar(image, ax=axis, pad=0.02)
+    bar.set_label("MAE")
+    fig.tight_layout()
+    return fig
+
+
+def plot_error_by_hour(by_hour: dict[str, dict[str, Any]], *, square_id: int):
+    """Error against hour of day, one line per model.
+
+    Args:
+        by_hour: Model name to the output of :func:`src.diagnostics.error_by_hour`.
+        square_id: Area identifier.
+
+    Returns:
+        The figure.
+    """
+    fig, axis = _figure(figsize=(11, 4.0))
+
+    for index, (model, result) in enumerate(by_hour.items()):
+        axis.plot(
+            result["hours"],
+            result["mae"],
+            marker="o",
+            ms=3,
+            lw=1.3,
+            color=_SERIES_COLOURS[index % len(_SERIES_COLOURS)],
+            label=model,
+        )
+
+    axis.set_xticks(range(0, 24, 2))
+    axis.set_xlabel("hour of day (Europe/Rome)")
+    axis.set_ylabel("MAE")
+    axis.set_title(f"Error by hour of day, square {square_id}")
+    axis.legend(fontsize=9, ncol=min(3, max(1, len(by_hour))))
+    axis.grid(alpha=0.25)
+    fig.tight_layout()
+    return fig
+
+
+def plot_residual_acf(acfs: dict[str, dict[str, Any]], *, square_id: int, daily_period: int = 144):
+    """Residual autocorrelation, one panel per model.
+
+    Args:
+        acfs: Model name to the output of :func:`src.diagnostics.residual_acf`.
+        square_id: Area identifier.
+        daily_period: Steps per day, marked to show leftover seasonality.
+
+    Returns:
+        The figure.
+    """
+    models = list(acfs)
+    fig, axes = _figure(len(models), 1, figsize=(11, 2.6 * len(models)), sharex=True)
+    if len(models) == 1:
+        axes = [axes]
+
+    for axis, model in zip(axes, models, strict=True):
+        result = acfs[model]
+        lags, values = result["lags"][1:], result["acf"][1:]
+        axis.bar(lags, values, width=1.0, color=_SERIES_COLOURS[0])
+        bound = result["confidence"]
+        axis.axhline(bound, color="grey", ls="--", lw=0.8)
+        axis.axhline(-bound, color="grey", ls="--", lw=0.8)
+        if lags.size and lags.max() >= daily_period:
+            axis.axvline(daily_period, color=_SERIES_COLOURS[1], lw=1.0, alpha=0.8)
+        axis.set_ylabel(model, fontsize=9)
+
+    axes[-1].set_xlabel("lag (10-minute steps)")
+    axes[0].set_title(
+        f"Residual autocorrelation, square {square_id} "
+        "(structure here is signal the model did not use)"
+    )
+    fig.tight_layout()
+    return fig
+
+
+def plot_cross_correlation(correlations: dict[str, dict[str, Any]], *, square_id: int):
+    """Forecast-to-observation cross-correlation, one line per model.
+
+    A peak at lag 0 means the forecast tracks the series. A peak at lag 1 means
+    it reproduces the previous observation, which is the collapse this figure
+    exists to make visible.
+
+    Args:
+        correlations: Model name to the output of
+            :func:`src.diagnostics.cross_correlation`.
+        square_id: Area identifier.
+
+    Returns:
+        The figure.
+    """
+    fig, axis = _figure(figsize=(9.5, 4.0))
+
+    for index, (model, result) in enumerate(correlations.items()):
+        axis.plot(
+            result["lags"],
+            result["correlation"],
+            marker="o",
+            ms=3,
+            lw=1.2,
+            color=_SERIES_COLOURS[index % len(_SERIES_COLOURS)],
+            label=f"{model} (peak at {result['peak_lag']:+d})",
+        )
+
+    axis.axvline(0, color="grey", lw=0.8)
+    axis.axvline(1, color=_SERIES_COLOURS[1], lw=0.8, ls="--", alpha=0.7)
+    axis.set_xlabel("lag (10-minute steps; +1 means the forecast repeats the last observation)")
+    axis.set_ylabel("correlation")
+    axis.set_title(f"Forecast vs observation cross-correlation, square {square_id}")
+    axis.legend(fontsize=9)
+    axis.grid(alpha=0.25)
+    fig.tight_layout()
+    return fig
+
+
+def plot_cross_area_mase(table: list[dict[str, Any]], *, areas: list[int]):
+    """Grouped MASE bars, one group per model.
+
+    MASE is used because the areas differ by an order of magnitude in volume,
+    so raw error is not comparable between them.
+
+    Args:
+        table: Output of :func:`src.diagnostics.cross_area_table`.
+        areas: Area identifiers, in the order to plot them.
+
+    Returns:
+        The figure.
+    """
+    models = [row["model"] for row in table]
+    fig, axis = _figure(figsize=(11, 4.4))
+
+    width = 0.8 / max(len(areas), 1)
+    positions = np.arange(len(models))
+    for index, area in enumerate(areas):
+        values = [
+            row[f"mase_{area}"] if row.get(f"mase_{area}") is not None else np.nan for row in table
+        ]
+        axis.bar(
+            positions + index * width,
+            values,
+            width=width,
+            color=_SERIES_COLOURS[index % len(_SERIES_COLOURS)],
+            label=f"square {area}",
+        )
+
+    axis.axhline(1.0, color="grey", ls="--", lw=0.9)
+    axis.text(0.01, 1.02, "MASE 1.0 = in-sample naive", fontsize=8, color="grey")
+    axis.set_xticks(positions + width * (len(areas) - 1) / 2)
+    axis.set_xticklabels(models, rotation=20, ha="right")
+    axis.set_ylabel("MASE")
+    axis.set_title("Cross-area comparison (lower is better)")
+    axis.legend(fontsize=9, ncol=max(1, len(areas)))
     fig.tight_layout()
     return fig

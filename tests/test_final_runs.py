@@ -285,11 +285,10 @@ def test_ensemble_row_is_named_for_its_members() -> None:
 
 def test_ensemble_cost_is_summed_not_averaged() -> None:
     """An ensemble forecast needs every member fitted and every member run."""
-    from src.final_runs import build_ensemble
-    from src.splits import make_splits
-
     from src.config import load_config
     from src.evaluate import load_area_series
+    from src.final_runs import build_ensemble
+    from src.splits import make_splits
 
     config = load_config(auto_env=False)
     if not (config.paths.processed / "selected_series.parquet").exists():
@@ -321,11 +320,10 @@ def test_averaging_predictions_cannot_increase_error() -> None:
     saved prediction series always looks at least as good as the model row
     beside it. That gap is why both rows must exist.
     """
-    from src.final_runs import build_ensemble
-    from src.splits import make_splits
-
     from src.config import load_config
     from src.evaluate import load_area_series
+    from src.final_runs import build_ensemble
+    from src.splits import make_splits
 
     config = load_config(auto_env=False)
     if not (config.paths.processed / "selected_series.parquet").exists():

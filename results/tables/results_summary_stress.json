@@ -1,0 +1,52 @@
+{
+  "split": "stress",
+  "areas": [
+    5161,
+    4159,
+    4556
+  ],
+  "figures": [
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\forecast_stress_5161_harmonic_arima.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\forecast_stress_5161_lightgbm.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\forecast_stress_5161_lstm.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\error_by_hour_stress_5161.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\error_heatmap_stress_5161_harmonic_arima.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\error_heatmap_stress_5161_lightgbm.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\error_heatmap_stress_5161_lstm.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\residual_acf_stress_5161.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\cross_correlation_stress_5161.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\forecast_stress_4159_harmonic_arima.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\forecast_stress_4159_lightgbm.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\forecast_stress_4159_lstm.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\error_by_hour_stress_4159.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\error_heatmap_stress_4159_harmonic_arima.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\error_heatmap_stress_4159_lightgbm.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\error_heatmap_stress_4159_lstm.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\residual_acf_stress_4159.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\cross_correlation_stress_4159.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\forecast_stress_4556_harmonic_arima.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\forecast_stress_4556_lightgbm.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\forecast_stress_4556_lstm.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\error_by_hour_stress_4556.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\error_heatmap_stress_4556_harmonic_arima.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\error_heatmap_stress_4556_lightgbm.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\error_heatmap_stress_4556_lstm.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\residual_acf_stress_4556.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\cross_correlation_stress_4556.png",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\figures\\cross_area_mase_stress.png"
+  ],
+  "tables": [
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\tables\\copying_stress.csv",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\tables\\failure_windows_stress.csv",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\tables\\error_by_daytype_stress.csv",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\tables\\error_by_hour_stress.csv",
+    "C:\\Users\\Luqma\\dev\\projects\\coursework\\milan-traffic-forecasting\\results\\tables\\cross_area_mase_stress.csv"
+  ],
+  "copying_verdicts": {
+    "persistence": "collapsed",
+    "seasonal_naive": "independent",
+    "harmonic_arima": "independent",
+    "lightgbm": "independent",
+    "lstm": "independent"
+  }
+}
