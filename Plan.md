@@ -15,13 +15,21 @@
 | 3 — Exploratory analysis | ✅ complete | `f64da2d`, `8cc9bd1`, `9e780f3` |
 | **3b — Related work and model selection** | ✅ complete — gap found after the plan was written | |
 | 4 — Forecasting framework | ✅ complete | |
-| 5 — Models and experimentation | ⬜ **next** | |
-| 6 — Evaluation and failure analysis | ⬜ | |
-| 7 — Reproducibility and repo polish | ⬜ | |
-| 8 — Report support artefacts | 🟡 partial — evidence pack scaffolded | |
+| 5 — Models and experimentation | ✅ complete | `2b682c7`, `3a2fd50`, `038b47f`, `b6a3b80` |
+| 6 — Evaluation and failure analysis | ✅ complete | `d15c410` |
+| 7 — Reproducibility and repo polish | ✅ complete | `397356b`, `90bb14f` |
+| 8 — Report support artefacts | 🟡 **next** — evidence pack scaffolded | |
 
-**236 tests passing.** Full dataset ingested; `data/processed/` holds the
+**464 tests passing.** Full dataset ingested; `data/processed/` holds the
 `8928 × 10000` matrix. Study areas resolved: **{5161, 4159, 4556}**.
+
+**Headline result.** On the test week the 22-parameter harmonic regression has the best
+mean MASE (0.213) and wins two of three areas; a three-seed LSTM ensemble takes the
+third (0.233 against harmonic's 0.241 on square 5161). Averaged across areas only
+harmonic ARIMA and LightGBM beat persistence. On the held-out holiday split persistence
+wins two of three areas outright while LightGBM degrades 69–140% and the LSTM 78–103%,
+confirming a prediction written into `src/models/gbm.py` before that split was run.
+A clean clone reproduces every metric exactly.
 
 ---
 
