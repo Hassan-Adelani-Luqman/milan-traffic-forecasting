@@ -10,16 +10,16 @@ Hassan Adelani Luqman
 
 Mobile network operators must commit radio and backhaul resources before demand arrives,
 which makes short-horizon traffic forecasting an operational requirement rather than an
-academic exercise. This study compares three structurally different sequential models —
+academic exercise. This study compares three structurally different sequential models which includes
 a dynamic harmonic regression with ARIMA errors, a long short-term memory (LSTM) network,
-and a gradient-boosted tree ensemble (LightGBM) — for one-step-ahead (10-minute)
+and a gradient-boosted tree ensemble (LightGBM), for one-step-ahead (10-minute)
 forecasting of mobile internet activity in Milan, evaluated on the week 16–22 December
 2013 across three geographical areas with distinct traffic regimes.
 
 19.38 GiB of raw call-detail records were processed into a 340.58 MiB matrix using a
 streaming pipeline whose working set is independent of dataset size. Exploratory analysis
 established that two seasonal cycles operate simultaneously, carrying 82.9% and 10.0% of
-variance, and that the lag-1 autocorrelation is 0.987 — high enough that a naive
+variance, and that the lag-1 autocorrelation is 0.987, high enough that a naive
 persistence forecast is a demanding baseline and that any flexible model risks collapsing
 to reproducing its own input.
 
@@ -223,7 +223,7 @@ from call-detail records, and is described as such throughout this report.
 
 After aggregation the data is small: the full `8928 × 10000` matrix occupies **340.58 MiB**
 as `float32`. The memory-management problem is therefore not storing the result but
-reaching it — converting 19.38 GiB of text without ever holding more than one day in
+reaching it, converting 19.38 GiB of text without ever holding more than one day in
 memory.
 
 Only three of the eight columns are required. The pipeline projects to `square_id`,
@@ -339,7 +339,7 @@ no zero value at any point in any split, with minima of 47.3, 55.8 and 80.2.
 
 ### 3.6 Reproducibility
 
-All configuration — paths, dates, split boundaries, preprocessing parameters — resides in a
+All configuration — paths, dates, split boundaries, preprocessing parameters, resides in a
 single YAML file, loaded into immutable structures with strict validation that rejects
 unknown keys and verifies that the four splits are contiguous, non-overlapping and within
 the observation period. Logic resides in a tested library of 488 tests; notebooks import
@@ -703,7 +703,53 @@ lag set was chosen from the measured autocorrelation rather than convention: lag
 multiple of the daily period that the ACF identified. Feature importances then provide an
 interpretability check that neither other model offers.
 
-### 5.5 Tuning protocol
+### 5.5 Input representation, preprocessing and training
+
+The three models consume the same series in three different forms, and the differences are
+the substance of the comparison rather than implementation detail.
+
+**Variance stabilisation and normalisation.** Section 4.8 measured a correlation of +0.947
+between daily mean and daily standard deviation, falling to +0.265 after a `log1p`
+transform: error variance scales with level, which violates the constant-variance
+assumption behind squared-error training. All three models therefore fit on
+`log1p`-transformed values, and the LSTM and LightGBM additionally standardise to zero mean
+and unit variance. The statistics are those of `log1p(x)`, not of `x` — standardising first
+and taking logs afterwards would be a different transform and would not invert the same
+way. Mean and standard deviation are estimated on the **training split only**; the scaler
+refuses to refit and raises an error if asked, so leakage fails loudly. Every reported
+metric is computed after inverse-transforming back to original units.
+
+**Calendar features**, used by the LSTM and LightGBM, are six columns: sine and cosine of
+minute-of-day, sine and cosine of day-of-week, a weekend indicator, and a holiday indicator
+covering the Italian national calendar plus the two Milan-specific dates identified in
+Section 4.7. The cyclical encodings are used rather than raw integers so that 23:50 and
+00:00 are adjacent rather than maximally distant.
+
+**Table 8 — Input representation by model.**
+
+| Model | Input at time *t* | Shape | Target |
+|---|---|---|---|
+| harmonic ARIMA | 16 Fourier terms (2·*K*₁ daily + 2·*K*₂ weekly) as exogenous regressors; ARIMA(3,0,1) state | (16,) | `log1p(x(t))` |
+| LSTM | 144 previous intervals × (1 value + 6 calendar) | (144, 7) | `log1p(x(t))`, standardised |
+| LightGBM | 9 lags (1, 2, 3, 6, 12, 144, 145, 288, 1008), 3 rolling means and standard deviations (windows 6, 36, 144), 6 calendar | (27,) | `log1p(x(t))`, standardised |
+
+Every feature is **causal**: each is computed from observations strictly before *t*. The
+lag set is the one Section 4.5 identified from the measured autocorrelation, not a
+convention — lag 1 as the strongest single predictor, then every multiple of the daily
+period the ACF marked, with lag 145 included because it is the daily lag of the previous
+interval.
+
+**Training procedure.** The LSTM is trained with Adam on an L1 objective, matching the
+selection metric, with gradient-norm clipping at 1.0 and dropout between layers. Training
+stops on validation MAE with patience, and the **best checkpoint is restored rather than
+the last**, because the final epoch is usually not the best one. LightGBM likewise
+optimises an L1 objective with early stopping on the validation split. The harmonic
+regression is fitted by maximum likelihood and then updated through the evaluation window
+with `append(..., refit=False)`, which conditions on each new observation without
+re-estimating parameters — the operation that makes its walk-forward inference tractable,
+and, as Section 6.4 shows, also the reason its per-step cost is high.
+
+### 5.6 Tuning protocol
 
 Tuning ran on the highest-traffic area only (square 5161), selecting on validation MAE. Search
 proceeded one axis at a time, carrying the winner forward, so that each decision is
@@ -727,7 +773,7 @@ Every candidate — **101 in total** — appends a row to an append-only experim
 its hyperparameters, validation metrics, wall time, parameter count, the source commit, and a
 non-empty rationale describing what the comparison implied for the next step.
 
-**Table 8 — Selected hyperparameters.**
+**Table 9 — Selected hyperparameters.**
 
 | Model | Selection |
 |---|---|
@@ -742,7 +788,7 @@ order came from the moving-average term: (2,0,0) → (2,0,1) reduced validation 
 while the three best orders spanned 0.08 MAE — a difference within noise, so ARIMA(3,0,1) was
 selected on a margin that does not distinguish it from the more parsimonious ARIMA(1,0,1).
 
-### 5.6 Final fits
+### 5.7 Final fits
 
 Once hyperparameters are selected the validation split has done its job, and withholding it
 would discard a week of data the model is entitled to learn from. The final fit therefore uses
@@ -759,7 +805,7 @@ The LSTM is run over **three seeds** and reported as mean ± standard deviation,
 single seed reports one draw from a distribution and the spread here proves comparable to the
 differences between models.
 
-### 5.7 Two quantities that are easy to confuse
+### 5.8 Two quantities that are easy to confuse
 
 The results tables report the LSTM twice, and the distinction matters.
 
@@ -777,7 +823,7 @@ training, three passes of inference and three times the parameters.
 
 ### 6.1 Accuracy on the test week
 
-**Table 9 — MASE by area, test week (16–22 December 2013). Lower is better; 1.0 is the
+**Table 10 — MASE by area, test week (16–22 December 2013). Lower is better; 1.0 is the
 in-sample naive forecast.**
 
 | Model | 5161 | 4159 | 4556 | mean | worst |
@@ -809,7 +855,7 @@ and 202,369 for a single LSTM. Ranking by parameter count inverts the ranking by
 to a parameter count for a tree model; unlike the other two it varies by area, because it
 depends on the data fitted rather than on the architecture.)
 
-**Table 10 — Full metrics by area, test week.**
+**Table 11 — Full metrics by area, test week.**
 
 | Area | Model | MAE | ± | RMSE | MAPE % | sMAPE % | MASE | R² |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
@@ -884,7 +930,7 @@ interpretation attached.
 
 ### 6.4 Computational cost
 
-**Table 11 — Computational cost, square 5161, 1,008 one-step forecasts.** Training times are
+**Table 12 — Computational cost, square 5161, 1,008 one-step forecasts.** Training times are
 **not comparable across devices**; the device is carried in the table rather than left to a
 caption.
 
@@ -932,7 +978,7 @@ The measure used is the **copy ratio**: the mean distance between a model's fore
 persistence baseline, divided by how far the series itself moves between steps. Zero means the
 two are the same forecast.
 
-**Table 12 — Collapse-to-persistence check, test week.**
+**Table 13 — Collapse-to-persistence check, test week.**
 
 | Model | copy ratio (range across areas) | verdict |
 |---|---|---|
@@ -959,7 +1005,7 @@ slightly more strongly with the previous observation than with the current one. 
 peaking at lag 0 on a series this persistent would be the suspicious case, because it would
 imply access to the present value. The measured data settles the question: seasonal naive is
 the only model peaking at lag 0, and it is comfortably the worst forecaster in the study. The
-verdict in Table 12 therefore rests on the copy ratio, with the peak reported but not used as
+verdict in Table 13 therefore rests on the copy ratio, with the peak reported but not used as
 the test.
 
 ### 7.2 Where the errors fall
@@ -972,7 +1018,7 @@ What distinguishes the models is where their error peaks *relative* to the other
 **Figure 20 —** Mean absolute error against hour of day, square 4159, one line per model. The
 LSTM's excess is concentrated in the morning.
 
-**Table 13 — Error by day type, test week.**
+**Table 14 — Error by day type, test week.**
 
 | Area | Model | Weekday MAE | Weekend MAE | Weekend penalty |
 |---|---|---:|---:|---:|
@@ -989,7 +1035,7 @@ LSTM's excess is concentrated in the morning.
 | 4556 | LightGBM | 29.14 | 31.91 | 1.10 |
 | 4556 | LSTM | 27.54 | 29.01 | 1.05 |
 
-**Table 14 — Worst contiguous six-hour windows, test week.** `ratio` above 1 means persistence
+**Table 15 — Worst contiguous six-hour windows, test week.** `ratio` above 1 means persistence
 would have been better over exactly that stretch.
 
 | Area | Model | Window start | MAE | persistence MAE | ratio |
@@ -1023,7 +1069,7 @@ signal the model did not use; the marked line is the daily period.
 The stress split covers 23 December to 1 January, contains four of the eight Italian public
 holidays in the study period, and was never tuned on or used for selection.
 
-**Table 15 — MASE on the held-out stress split, relative to persistence on the same area.**
+**Table 16 — MASE on the held-out stress split, relative to persistence on the same area.**
 
 | Model | 5161 | 4159 | 4556 |
 |---|---:|---:|---:|
