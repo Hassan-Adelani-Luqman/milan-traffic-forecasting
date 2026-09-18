@@ -59,15 +59,22 @@ def inline(text: str) -> str:
     """
     out = html.escape(text, quote=False)
 
+    # Sub- and superscripts are translated before emphasis is parsed. In a span
+    # like *K*<subscript one> the character after the closing asterisk is a
+    # subscript digit, which \w matches, so the italic pattern failed there --
+    # and its lazy quantifier then ran on to the next asterisk in the paragraph,
+    # italicising an unrelated run and leaving stray asterisks on the page.
+    out = SUPER_RUN.sub(lambda m: f"<super>{m.group(0).translate(SUPERSCRIPTS)}</super>", out)
+    out = SUB_RUN.sub(lambda m: f"<sub>{m.group(0).translate(SUBSCRIPTS)}</sub>", out)
+
     # Code spans before emphasis, so underscores inside code survive.
     out = re.sub(r"`([^`]+)`", r'<font face="Mono" size="9">\1</font>', out)
-    out = re.sub(r"\*\*\*(.+?)\*\*\*", r"<b><i>\1</i></b>", out)
-    out = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", out)
-    out = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])", r"<i>\1</i>", out)
-    out = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<link href="\2" color="#1a4d80">\1</link>', out)
-
-    out = SUPER_RUN.sub(lambda m: f"<super>{m.group(0).translate(SUPERSCRIPTS)}</super>", out)
-    return SUB_RUN.sub(lambda m: f"<sub>{m.group(0).translate(SUBSCRIPTS)}</sub>", out)
+    out = re.sub(r"\*\*\*([^*]+?)\*\*\*", r"<b><i>\1</i></b>", out)
+    out = re.sub(r"\*\*([^*]+?)\*\*", r"<b>\1</b>", out)
+    # [^*] rather than . so an unmatched asterisk cannot swallow the rest of the
+    # paragraph looking for a partner.
+    out = re.sub(r"(?<![\w*])\*(?!\s)([^*]+?)(?<!\s)\*(?![\w*])", r"<i>\1</i>", out)
+    return re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<link href="\2" color="#1a4d80">\1</link>', out)
 
 
 def plain(text: str) -> str:
@@ -208,12 +215,14 @@ class MarkdownParser:
         return index
 
     def _list(self, blocks: list[Block], index: int) -> int:
-        items: list[tuple[str, bool]] = []
+        # The original marker is kept, not just whether the list is ordered, so a
+        # numbered list renders with its numbers rather than a generic glyph.
+        items: list[tuple[str, str]] = []
         while index < len(self.lines):
             stripped = self.lines[index].strip()
             match = re.match(r"^(\d+\.|[-*+])\s+(.*)$", stripped)
             if match:
-                items.append((match.group(2), match.group(1)[0].isdigit()))
+                items.append((match.group(2), match.group(1)))
                 index += 1
             elif stripped and items and not stripped.startswith(("|", "#", "!", ">", "```")):
                 # A continuation line belongs to the item above it.
@@ -408,9 +417,15 @@ def _styles(body: str) -> dict[str, Any]:
             leading=14.5,
             alignment=TA_JUSTIFY,
             textColor=ink,
-            leftIndent=16,
+            leftIndent=18,
             bulletIndent=4,
             spaceAfter=4,
+            # Without these the marker is drawn in ReportLab's default Helvetica,
+            # which mismatches the body typeface and leaves the bullet with no
+            # usable Unicode mapping -- it extracts from the finished PDF as
+            # U+007F rather than as a bullet.
+            bulletFontName=body,
+            bulletFontSize=10.5,
         ),
     }
 
@@ -567,8 +582,12 @@ def _build_story(
         elif block.kind == "quote":
             story.append(Paragraph(inline(block.content), styles["quote"]))
         elif block.kind == "list":
-            for text, ordered in block.content:
-                marker = "&bull;" if not ordered else "&ndash;"
+            for text, source_marker in block.content:
+                # bulletText is drawn literally, not parsed as mini-HTML, so an
+                # entity like &bull; would appear on the page as those characters.
+                # A numbered list keeps its own numbering; anything else gets a
+                # real bullet glyph, which the font was checked for.
+                marker = source_marker if source_marker[0].isdigit() else "•"
                 story.append(Paragraph(inline(text), styles["bullet"], bulletText=marker))
             story.append(Spacer(1, 5))
         elif block.kind == "rule":

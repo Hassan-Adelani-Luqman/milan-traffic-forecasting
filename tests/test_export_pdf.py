@@ -117,13 +117,14 @@ def test_fenced_code_is_kept_verbatim() -> None:
     assert blocks[0].content == "python run.py test\n# a comment"
 
 
-def test_lists_record_whether_they_are_ordered() -> None:
+def test_lists_keep_their_original_markers() -> None:
+    """The marker is kept, not just orderedness, so numbers survive to the page."""
     blocks = MarkdownParser("- one\n- two\n").parse()
     assert blocks[0].kind == "list"
-    assert [ordered for _, ordered in blocks[0].content] == [False, False]
+    assert [marker for _, marker in blocks[0].content] == ["-", "-"]
 
     blocks = MarkdownParser("1. one\n2. two\n").parse()
-    assert [ordered for _, ordered in blocks[0].content] == [True, True]
+    assert [marker for _, marker in blocks[0].content] == ["1.", "2."]
 
 
 def test_wrapped_list_items_stay_with_their_item() -> None:
@@ -197,3 +198,68 @@ def test_rendered_pdf_is_complete() -> None:
 
     for probe in ("Abstract", "References", "Appendix C", "MASE"):
         assert probe in text, f"{probe!r} missing from the rendered PDF"
+
+
+# --------------------------------------------------------------------------
+# Markup must not reach the page
+# --------------------------------------------------------------------------
+
+
+def test_italics_survive_a_following_subscript() -> None:
+    r"""Regression: *K* followed by a subscript broke the italic pattern.
+
+    A subscript digit matches \w, so the lookahead after the closing asterisk
+    failed, and the lazy quantifier then ran on to the next asterisk in the
+    paragraph -- italicising an unrelated run and leaving stray asterisks on the
+    rendered page.
+    """
+    assert inline("*K*₁ = 2") == "<i>K</i><sub>1</sub> = 2"
+    assert inline("2·*K*₂ weekly") == "2·<i>K</i><sub>2</sub> weekly"
+
+
+def test_an_unmatched_asterisk_cannot_swallow_the_paragraph() -> None:
+    rendered = inline("a * b and then *real emphasis* here")
+    assert "<i>real emphasis</i>" in rendered
+    assert rendered.count("<i>") == 1
+
+
+def test_list_markers_are_characters_not_entities() -> None:
+    """bulletText is drawn literally, so an entity appears as its own text."""
+    blocks = MarkdownParser("- one\n- two\n").parse()
+    markers = [marker for _, marker in blocks[0].content]
+    assert markers == ["-", "-"]
+
+    blocks = MarkdownParser("1. first\n2. second\n").parse()
+    assert [m for _, m in blocks[0].content] == ["1.", "2."]
+
+
+def test_rendered_pdf_contains_no_markup_artefacts() -> None:
+    """The check that would have caught &bull; and &ndash; on the page."""
+    if not PDF.exists():
+        pytest.skip("REPORT.pdf not built; run `python run.py pdf`")
+    pypdf = pytest.importorskip("pypdf")
+    import re as _re
+
+    text = "".join(page.extract_text() or "" for page in pypdf.PdfReader(str(PDF)).pages)
+
+    offenders = {
+        "HTML entities": _re.findall(r"&[a-zA-Z]+;?", text),
+        "raw HTML tags": _re.findall(r"</?(?:b|i|font|sub|super|link|br)\b[^>]*>", text),
+        "stray asterisks": _re.findall(r"\*", text),
+        "markdown headings": _re.findall(r"(?m)^#{1,6}\s", text),
+        "table pipe rules": _re.findall(r"\|\s*-{2,}", text),
+        "image or link syntax": _re.findall(r"!\[|\]\(", text),
+        "backticks": _re.findall(r"`", text),
+        "control characters": [c for c in text if ord(c) < 32 and c not in "\n\r\t"],
+        "replacement characters": _re.findall("�", text),
+    }
+    found = {name: len(hits) for name, hits in offenders.items() if hits}
+    assert found == {}, f"markup reached the rendered page: {found}"
+
+
+def test_rendered_pdf_uses_real_bullet_glyphs() -> None:
+    if not PDF.exists():
+        pytest.skip("REPORT.pdf not built")
+    pypdf = pytest.importorskip("pypdf")
+    text = "".join(page.extract_text() or "" for page in pypdf.PdfReader(str(PDF)).pages)
+    assert "•" in text, "unordered lists have no bullet glyph"

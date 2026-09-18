@@ -647,4 +647,4 @@ Full IEEE-style reference list with verification notes: `report/references.md`.
 ---
 
 **Source code:** `https://github.com/Hassan-Adelani-Luqman/milan-traffic-forecasting`
-**Demonstration video:** `<video URL>`
+**Demonstration video:** `https://youtu.be/mbB-tx4SPrg`

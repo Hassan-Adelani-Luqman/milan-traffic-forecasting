@@ -1288,4 +1288,4 @@ AI was used to help interpret and clarify the project requirements, which suppor
 ---
 
 **Source code:** `https://github.com/Hassan-Adelani-Luqman/milan-traffic-forecasting`
-**Demonstration video:** `<video URL>`
+**Demonstration video:** `https://youtu.be/mbB-tx4SPrg`
