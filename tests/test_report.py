@@ -92,7 +92,37 @@ def test_report_keeps_its_limitations_section(report: str) -> None:
     assert "device-invariant" in report
 
 
-def test_ai_declaration_is_left_for_the_author(report: str) -> None:
-    """The brief requires this and it must not be written on the author's behalf."""
-    assert "Declaration on the use of AI tools" in report
-    assert "To be completed by the author" in report
+def test_ai_declaration_is_present_and_written(report: str) -> None:
+    """The brief requires a declaration, and it must be the author's own words.
+
+    This asserts the section exists and is filled in -- not that it says anything
+    in particular, because its content is the author's to decide.
+    """
+    heading = "## Appendix C — Declaration on the use of AI tools"
+    assert heading in report
+    body = report.split(heading, 1)[1].split("---", 1)[0].strip()
+    assert body, "the declaration section is empty"
+    assert "to be completed" not in body.lower(), "the declaration is still a placeholder"
+    assert len(body.split()) >= 20, "the declaration looks too short to be a real statement"
+
+
+def test_repository_link_is_filled_in(report: str) -> None:
+    """A submitted report with a placeholder repo link has no repo link."""
+    tail = report.rsplit("---", 1)[-1]
+    assert "**Source code:**" in tail
+    source_line = next(ln for ln in tail.splitlines() if "**Source code:**" in ln)
+    assert "<" not in source_line, f"repository URL is still a placeholder: {source_line}"
+
+
+def test_video_link_is_filled_in(report: str) -> None:
+    """Skipped rather than failed while the video is outstanding.
+
+    The demonstration video is a separate deliverable that cannot be produced from
+    this repository, so a permanent red suite here would train the reader to ignore
+    failures. The skip message is the reminder; run pytest with -rs to see it.
+    """
+    tail = report.rsplit("---", 1)[-1]
+    video_line = next((ln for ln in tail.splitlines() if "**Demonstration video:**" in ln), "")
+    assert video_line, "the report has no demonstration-video line"
+    if "<" in video_line:
+        pytest.skip("video URL not yet added to REPORT.md - required before submission")

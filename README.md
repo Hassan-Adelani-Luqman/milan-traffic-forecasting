@@ -8,10 +8,39 @@ Challenge call-detail-record dataset (1 November 2013 – 1 January 2014).
 mobile network traffic forecasting, and how does their performance vary across
 geographical areas with different traffic characteristics?
 
-> **Status: complete.** All stages have run: ingest, exploratory analysis, model tuning,
-> final fits, evaluation and failure analysis. The write-up is `report/REPORT.md`.
-> A clean clone reproduces every reported metric exactly — see *Reproducing results*
-> below.
+> **Status: complete.** Ingest, exploratory analysis, model tuning, final fits, evaluation
+> and failure analysis have all run. The write-up is **[`report/REPORT.md`](report/REPORT.md)**.
+> A clean clone reproduces every reported metric exactly — see
+> [Reproducing results](#reproducing-results-without-the-20-gb-download).
+
+**Headline result.** The 22-parameter dynamic harmonic regression has the best mean MASE
+(0.213) and wins two of three areas; a three-seed LSTM ensemble takes the third. Averaged
+across areas only two of the three models beat a persistence baseline. On a held-out
+holiday period never used for tuning, persistence wins two of three areas outright while
+both learned models degrade by 69–140%.
+
+---
+
+## Contents
+
+- [The data](#the-data)
+- [Study areas](#study-areas)
+- [Where things run](#where-things-run)
+- [Setup](#setup)
+- [Running the pipeline](#running-the-pipeline)
+- [Reproducing results without the 20 GB download](#reproducing-results-without-the-20-gb-download)
+- [Configuration](#configuration)
+- [Repository layout](#repository-layout)
+- [Notebooks](#notebooks)
+- [Data handling and memory](#data-handling-and-memory)
+- [Exploratory findings](#exploratory-findings)
+- [Methodology](#methodology)
+- [Results](#results)
+- [Failure analysis](#failure-analysis)
+- [Testing and engineering practices](#testing-and-engineering-practices)
+- [The report](#the-report)
+- [Licence and data terms](#licence-and-data-terms)
+- [References](#references)
 
 ---
 
@@ -23,45 +52,81 @@ geographical areas with different traffic characteristics?
 | Grid geometry | `doi:10.7910/DVN/QJWLFU` (Milano Grid, GeoJSON) |
 | Coverage | 2013-11-01 → 2014-01-01, 62 daily TSV files |
 | Raw size | 19.38 GiB (20,804,803,507 B), 265–359 MiB per file |
+| Raw records | 319,896,289, reducing to 89,280,000 cells |
 | Spatial grid | 100 × 100 cells of 235 m, square ids 1–10000 |
 | Temporal resolution | 10 minutes → 144 intervals/day → 8,928 timestamps |
-| Target variable | `internet` (normalised CDR activity, not an integer count) |
+| Target variable | `internet` (normalised CDR activity, **not** an integer count) |
 
 Three properties of the raw files drive the whole design:
 
-1. **Rows are split by country code.** A single `(square_id, time_ms)` pair appears
-   many times, once per counterparty country. Traffic must be aggregated with
-   `group_by(["square_id", "time_ms"]).sum()` before use — this is why a day holds
-   ~5.16 M rows rather than 1.44 M (3.6 country rows per cell on average, at most 36).
-2. **After aggregation the data is small.** The full `8928 × 10000` matrix is 340.6 MiB
-   as `float32`. The memory-management problem is entirely about getting from 20 GB of
-   text to that matrix without ever holding more than one day in RAM.
-3. **Timestamps are epoch milliseconds in UTC, but files are aligned to *local*
-   midnight.** The first record of the 1 November file is `1383260400000` =
-   `2013-10-31 23:00 UTC` = `2013-11-01 00:00` CET. All conversion goes through
-   `Europe/Rome`, or every diurnal pattern shifts by an hour.
+1. **Rows are split by country code.** A single `(square_id, time_ms)` pair appears once per
+   counterparty country. Traffic must be aggregated with
+   `group_by(["square_id", "time_ms"]).sum()` before use — this is why a day holds ~5.16 M
+   rows rather than 1.44 M (3.6 country rows per cell on average, at most 36).
+2. **After aggregation the data is small.** The full `8928 × 10000` matrix is 340.58 MiB as
+   `float32`. The memory-management problem is entirely about getting from 19.38 GiB of text
+   to that matrix without ever holding more than one day in RAM.
+3. **Timestamps are epoch milliseconds in UTC, but files are aligned to *local* midnight.**
+   The first record of the 1 November file is `1383260400000` = `2013-10-31 23:00 UTC` =
+   `2013-11-01 00:00` CET. All conversion goes through `Europe/Rome`, or every diurnal
+   pattern shifts by an hour.
+
+**Data quality.** The assembled matrix contains zero missing intervals and zero `NaN`
+values; the gap-interpolation policy never had to execute. 34,682 cells (0.0388%) have no
+record, which means no activity was logged rather than data lost, and they are set to 0.0.
+The three modelled areas contain no zero at any point in any split.
+
+---
+
+## Study areas
+
+The brief asks for three geographical areas. The three *highest-traffic* cells turn out to
+be squares 5161, 5059 and 5259 — **within 470 m of one another**, all inside a single
+hotspot beside the Duomo. Comparing across them would have measured three samples of the
+same traffic regime and could not have answered how performance varies with area
+characteristics.
+
+The areas modelled are therefore:
+
+| Square | Rank | Mean | CV | Peak/trough | Night floor | Weekend ÷ weekday | Nearest landmark |
+|---|---:|---:|---:|---:|---:|---:|---|
+| **5161** | 1 | 1,427 | 0.968 | 99.4 | 0.130 | 1.384 | Galleria Vittorio Emanuele II (276 m) |
+| **4159** | 424 | 275 | 0.660 | 14.9 | 0.489 | 0.587 | Università Bocconi (365 m) |
+| **4556** | 109 | 512 | 0.485 | 17.0 | 0.534 | 1.140 | Navigli (273 m) |
+
+They differ in the properties that make forecasting hard, not merely in volume. Squares
+5059 and 5259 are retained in the exploratory figures for completeness but are not
+forecast.
 
 ---
 
 ## Where things run
 
-This project is **hybrid** by design:
+This project is **hybrid** by design, split by measurement rather than assumption:
 
-- **Locally** (Windows, Python 3.12): `src/`, `config/` and `tests/` are developed and
-  version-controlled. Tests run in seconds without a GPU.
-- **On Kaggle** (Linux, T4): ingest, and the stages that need a GPU — the LSTM sweep and
-  the final fits. Notebooks `git clone` this repo and import from `src/`; they contain no
-  model or preprocessing logic of their own. Harmonic ARIMA and LightGBM tuning run
-  locally in minutes. The split is measured, not assumed: a 288-step recurrence is
-  latency-bound on a sequential dependency that CPU threads cannot divide, so one LSTM
-  fit took 2,019 s locally against 2.6 s on a T4.
+- **Locally** (Windows, Python 3.12, CPU): `src/`, `config/` and `tests/` are developed and
+  version-controlled; harmonic ARIMA and LightGBM tuning; evaluation and all results
+  figures. Both searches finish in minutes.
+- **On Kaggle** (Linux, Tesla T4): the ingest, the LSTM sweep and the final fits. Notebooks
+  `git clone` this repo and import from `src/`; they contain no model or preprocessing logic
+  of their own.
 
-Kaggle's disk budget shapes the ingest: `/kaggle/working` is ~20 GB and persisted,
-while everything else is ~60 GB of scratch that is discarded at session end. The 20 GB
-of raw text therefore streams into `/kaggle/temp/raw` and each file is **deleted as soon
-as its per-day block is written**, holding peak disk near one file. Blocks are
-checkpointed into `/kaggle/working` so a 12-hour session timeout resumes rather than
-restarts.
+Two measurements justify the split. The download ran at 0.44 MiB/s locally (≈12.6 h
+projected) against 55.9 MiB/s on Kaggle (5.92 min) — a factor of ~127. And a 288-step
+recurrence is latency-bound on a sequential dependency CPU threads cannot divide: locally
+the process held 0.88 of 8 cores, and one LSTM configuration took **2,019 s on the CPU
+against 2.6 s on the T4**.
+
+Kaggle's disk budget shapes the ingest: `/kaggle/working` is ~20 GB and persisted, while
+everything else is ~60 GB of scratch discarded at session end. The raw text therefore
+streams into `/kaggle/temp/raw` and each file is **deleted as soon as its per-day block is
+written**, holding peak disk near one file. Blocks are checkpointed so a 12-hour session
+timeout resumes rather than restarts.
+
+**Consequence for reporting:** `train_wall_s` is not comparable across models, so every
+results and timing table carries a `device` column, and hardware is recorded in
+`results/environment.json` (local) and `results/environment_final_runs.json` (the T4
+session that produced the final fits).
 
 ---
 
@@ -70,58 +135,60 @@ restarts.
 ### Local
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/Hassan-Adelani-Luqman/milan-traffic-forecasting.git
 cd milan-traffic-forecasting
 
 py -V:3.12 -m venv .venv                       # Windows
 .venv\Scripts\pip install -r requirements-local.txt
 
-# Verify the scaffold and record your hardware
-.venv\Scripts\python run.py test
-.venv\Scripts\python run.py env
+.venv\Scripts\python run.py test               # 506 tests
+.venv\Scripts\python run.py env                # record hardware
 ```
 
 On macOS/Linux substitute `python3.12 -m venv .venv` and `.venv/bin/pip`.
 
+Python 3.12 is required: 3.14 lacks reliable wheels for torch, lightgbm and geopandas.
+
+Three requirements files, for three purposes:
+
+| File | Use |
+|---|---|
+| `requirements.txt` | Core pipeline, pinned. What a reproducer installs. |
+| `requirements-local.txt` | Local development; CPU-only torch build. |
+| `requirements-kaggle.txt` | What the notebooks install on Kaggle. |
+
 ### Kaggle
 
-`notebooks/00_kaggle_ingest.ipynb` runs the whole data stage. Upload it to Kaggle, then:
+Each notebook's first markdown cell lists its own prerequisites. In summary:
 
-1. **Settings -> Internet -> On** (requires a phone-verified account).
-2. **Add-ons -> Secrets**: add `DATAVERSE_GB_NAME`, `DATAVERSE_GB_EMAIL`,
+1. **Settings → Internet → On** (requires a phone-verified account) — needed for the
+   `git clone` and `pip install`.
+2. **Accelerator:** *None* for the ingest (it is I/O-bound); **GPU** for
+   `01_kaggle_lstm` and `03_kaggle_final`, both of which assert CUDA is present rather
+   than silently falling back to a CPU run that would take days.
+3. **Add-ons → Secrets** (ingest only): `DATAVERSE_GB_NAME`, `DATAVERSE_GB_EMAIL`,
    `DATAVERSE_GB_INSTITUTION`, `DATAVERSE_GB_POSITION`. Harvard Dataverse gates this
-   dataset behind a Guestbook and records one response per download request, so these
-   must be real details.
-3. **Accelerator -> None.** This stage is I/O-bound; save the GPU quota for modelling.
-4. Edit `REPO_URL` in the settings cell to point at this repository.
-5. **Save Version -> Save & Run All (Commit).** `/kaggle/working` is only persisted by a
+   dataset behind a Guestbook and records one response per download request, so these must
+   be real details. They are read from Kaggle Secrets, never written into the notebook.
+4. Edit `REPO_URL` in the settings cell to point at your fork.
+5. **Save Version → Save & Run All (Commit).** `/kaggle/working` is only persisted by a
    committed version.
-6. On the finished version: **Output -> New Dataset**. Later notebooks attach that
-   dataset and never need the raw data or internet again.
 
-`src.config` detects the Kaggle session automatically and layers `config/kaggle.yaml`
-over the defaults, so no path edits are needed.
+`src.config` detects the Kaggle session automatically and layers `config/kaggle.yaml` over
+the defaults, so no path edits are needed.
 
-The notebook is generated from `notebooks/build_kaggle_notebook.py` rather than edited
-by hand, which keeps it thin and keeps it honest: `tests/test_notebook.py` asserts that
-every `src` symbol it imports still exists and that it defines no functions or classes
-of its own.
-
-#### Why the ingest streams
-
-`/kaggle/temp` is scratch discarded at session end and sessions are capped at 12 hours.
-Downloading all 62 files and then ingesting would, on a timeout at hour 11, lose every
-raw file and leave nothing behind. `src/pipeline.py` interleaves instead: download one
-day, convert it to a dense block, write the block to `/kaggle/working`, delete the raw
-text, repeat. Peak disk stays near one file (~350 MB) rather than 19.4 GiB, and every
-finished day is a durable artefact a resumed run skips.
+After a modelling notebook finishes, `./merge_kaggle_output.sh <download dir>` copies the
+files it produced back into the repo. It copies **only** those files and fails loudly if
+any are missing — `results/tables/` also holds exploratory artefacts the Kaggle session
+never had, several derived from the uncommitted 341 MB matrix, so replacing the directory
+wholesale would cost a full re-ingest.
 
 ---
 
 ## Running the pipeline
 
-`make` is not available on a default Windows install, so `run.py` is the canonical
-entry point on both platforms. The `Makefile` mirrors the same targets for Linux.
+`make` is not available on a default Windows install, so `run.py` is the canonical entry
+point on both platforms. The `Makefile` mirrors the same targets for Linux.
 
 ```bash
 python run.py env        # record hardware -> results/environment.json
@@ -131,85 +198,170 @@ python run.py pipeline   # stream download -> ingest -> delete (what Kaggle runs
 python run.py benchmark  # compare ingest strategies in isolated processes
 python run.py matrix     # assemble the 8928 x 10000 matrix
 python run.py eda        # exploratory figures, statistics, selected series
-python run.py train      # tune the three models (--models to select a subset)
-python run.py final      # refit on train+validation, evaluate on the test week
+python run.py train      # tune the models (--models to select a subset)
+python run.py final      # refit on train+validation, evaluate on a split
 python run.py results    # evaluation figures, diagnostics, failure analysis
 python run.py evaluate   # baseline metrics for any split
+python run.py facts      # regenerate the named fact registry
+python run.py report     # export figures and tables into report/
+python run.py test       # pytest
+python run.py lint       # ruff
 python run.py all        # everything above, in order
 ```
 
 Any task accepts `--config` and forwards remaining arguments to its module:
 
 ```bash
-python run.py ingest --config config/kaggle.yaml --limit 3
+python run.py ingest  --config config/kaggle.yaml --limit 3
+python run.py train   --models harmonic_arima,lightgbm --gbm-trials 30
+python run.py final   --split stress
+python run.py results --split stress
 ```
+
+`run.py train --models <names>` tunes a subset and **merges** into
+`results/tables/selected_hyperparameters.json`, so a run on one machine never discards
+another's selections, and it refuses to mix selections tuned on different areas. The
+experiment log is append-only across both machines.
 
 ### Reproducing results without the 20 GB download
 
-Four artefacts are committed so that everything after ingest reproduces from a clean
-clone: `data/processed/selected_series.parquet` (the extracted series, 283 KB),
-`results/tables/selected_areas.json`, `results/tables/selected_hyperparameters.json`,
-and `results/predictions/*.parquet` (the forecasts, 312 KB).
+Four artefacts are committed so that everything after ingest reproduces from a clean clone:
+`data/processed/selected_series.parquet` (the extracted series, 283 KB),
+`results/tables/selected_areas.json`, `results/tables/selected_hyperparameters.json`, and
+`results/predictions/*.parquet` (the forecasts, 312 KB).
 
 ```bash
-git clone <this repo> && cd milan-traffic-forecasting
+git clone https://github.com/Hassan-Adelani-Luqman/milan-traffic-forecasting.git && cd milan-traffic-forecasting
 python -m venv .venv && .venv/Scripts/activate      # source .venv/bin/activate on Linux
 pip install -r requirements.txt
 
 python run.py test                     # 506 tests, ~8 min
 python run.py evaluate --split test    # baseline metrics from the committed series
-python run.py results --split test     # 28 figures + 6 tables from the committed forecasts
-python run.py results --split stress   # the same for the holiday split
+python run.py results  --split test    # 28 figures + 5 tables from the committed forecasts
+python run.py results  --split stress  # the same for the holiday split
 ```
 
-Verified end to end: a fresh clone into an empty virtualenv reproduces every reported
-metric **exactly**, not merely to 3 significant figures.
+**Verified end to end:** a fresh clone into an empty virtualenv reproduces every reported
+metric and every summary **exactly**, not merely to 3 significant figures. The only
+differences between regenerated and committed artefacts are wall-clock timing columns and
+line endings.
 
 What this path cannot do, and why:
 
 | Stage | Needs | Why it is excluded |
 |---|---|---|
-| `download`, `ingest`, `matrix` | 19.4 GiB of raw CDR text | Not redistributable; `data/raw/` is gitignored |
+| `download`, `ingest`, `matrix` | 19.38 GiB of raw CDR text | Not redistributable; `data/raw/` is gitignored |
 | parts of `eda` | `traffic_matrix.npy` (341 MB) | Derived from the raw text, too large to commit |
 | `final` (LSTM rows) | a CUDA device | On CPU the nine LSTM fits take roughly 31 hours |
 
-The committed prediction series exist precisely because of that last row: the LSTM
-columns cannot be regenerated on a CPU in reasonable time, so without them the figures
-could not be redrawn from a clean clone.
+The committed prediction series exist precisely because of that last row: the LSTM columns
+cannot be regenerated on a CPU in reasonable time, so without them the figures could not be
+redrawn from a clean clone.
 
 ---
 
 ## Configuration
 
-`config/default.yaml` is the single source of truth for paths, dates, split boundaries
-and preprocessing defaults; `config/kaggle.yaml` overrides only what the Kaggle
-environment changes. Nothing in `src/` hardcodes a path, date or hyperparameter.
+`config/default.yaml` is the single source of truth for paths, dates, split boundaries and
+preprocessing defaults; `config/kaggle.yaml` overrides only what the Kaggle environment
+changes and is always layered *over* the defaults rather than replacing them. Nothing in
+`src/` hardcodes a path, date or hyperparameter.
 
 Loading is strict — an unknown key is an error, not a silently ignored typo — and the
 splits are validated as contiguous, non-overlapping and inside the observation period:
 
 | Split | Dates (inclusive, `Europe/Rome`) | Points | Purpose |
-|---|---|---|---|
+|---|---|---:|---|
 | train | 2013-11-01 → 2013-12-08 | 5,472 | Model fitting; all transforms fit here only |
 | validation | 2013-12-09 → 2013-12-15 | 1,008 | Hyperparameter selection |
 | test | 2013-12-16 → 2013-12-22 | 1,008 | Reported results (the week the brief fixes) |
 | stress | 2013-12-23 → 2014-01-01 | 1,440 | Failure analysis only; never tuned on |
+
+Splits are chronological, never random: a random split on a time series places future
+observations in the training set.
 
 ---
 
 ## Repository layout
 
 ```
-├── config/           default.yaml + kaggle.yaml overrides
-├── src/              all logic: ingest, features, models, evaluation
-│   └── models/       baselines, harmonic ARIMA, LSTM, LightGBM
-├── notebooks/        thin: import from src/, render figures only
-├── tests/            leakage, scaler, split and metric correctness
-├── results/          experiments.csv, figures, tables, predictions
-├── report/           figures and tables exported for the write-up
-├── run.py            cross-platform task runner
-└── Makefile          equivalent targets for Linux/Kaggle
+├── CLAUDE.md                  project brief and non-negotiables
+├── Plan.md                    phase-by-phase implementation plan and status
+├── README.md                  this file
+├── LICENSE                    MIT
+├── run.py                     cross-platform task runner
+├── Makefile                   equivalent targets for Linux/Kaggle
+├── merge_kaggle_output.sh     copy a Kaggle run's outputs back into the repo
+├── config/
+│   ├── default.yaml           single source of truth
+│   └── kaggle.yaml            overlay, merged over the defaults
+├── data/
+│   ├── raw/                   gitignored (except the grid GeoJSON)
+│   ├── interim/               gitignored, per-day blocks
+│   └── processed/             selected_series.parquet committed; matrix gitignored
+├── src/                       all logic — 36 modules
+│   ├── config.py              strict YAML loader into frozen dataclasses
+│   ├── download.py            Dataverse client: guestbook, resume, md5
+│   ├── pipeline.py            streaming download -> ingest -> delete
+│   ├── ingest.py              three ingest strategies
+│   ├── build_matrix.py        assembly, timezone, missing-data policy
+│   ├── memory_profiling.py    peak-RSS sampler
+│   ├── memory_report.py       benchmark, one subprocess per measurement
+│   ├── eda.py, tsanalysis.py  statistics: Gini, MSTL, ADF/KPSS, ACF, spectrum
+│   ├── geo.py, holidays_it.py grid geometry; Italian + Milanese holidays
+│   ├── features.py            scaler, windows, lag and calendar features
+│   ├── splits.py, metrics.py  chronological splits; MAE/RMSE/MAPE/sMAPE/MASE/R²
+│   ├── models/                baselines, harmonic ARIMA, LSTM, LightGBM
+│   ├── train.py               staged hyperparameter search
+│   ├── final_runs.py          refit on train+validation, seed ensembling
+│   ├── evaluate.py            baseline metrics per split
+│   ├── diagnostics.py         error structure, copying check, failure windows
+│   ├── plots.py               figures, kept separate from the statistics
+│   ├── run_eda.py             orchestrates the exploratory artefacts
+│   ├── run_results.py         orchestrates the evaluation artefacts
+│   ├── experiments.py         append-only experiment log
+│   ├── facts.py               named fact registry
+│   └── export_report.py       evidence pack for the write-up
+├── notebooks/                 thin: import from src/, render figures only
+│   ├── build_*_notebook.py    generators — the notebooks are output, not source
+│   └── runs/                  executed notebooks, kept as evidence
+├── tests/                     26 modules, 506 tests
+├── results/
+│   ├── experiments.csv        append-only log of all 101 tuning runs
+│   ├── environment*.json      hardware and library versions per machine
+│   ├── figures/               56 evaluation figures + eda/
+│   ├── tables/                metrics, diagnostics, timing
+│   └── predictions/           committed forecast series
+└── report/
+    ├── REPORT.md              the consolidated write-up
+    ├── RESULTS_SUMMARY.md     uninterpreted dump of every measured number
+    ├── FACTS.json / .md       133 named facts, each traceable to its artefact
+    ├── FIGURE_INDEX.md        figure -> report section map
+    ├── references.md          with per-reference verification notes
+    ├── figures/               46 figures at 300 dpi
+    └── tables/                50 tables
 ```
+
+---
+
+## Notebooks
+
+Notebooks are **generated** from `notebooks/build_*_notebook.py` rather than hand-edited.
+The generator is the source; the `.ipynb` is output. `tests/test_notebook.py` asserts that
+every `src` symbol a notebook imports still exists, that it defines no functions or classes
+of its own, that it imports no private names, and that it has not drifted from its
+generator.
+
+| Notebook | Runs on | What it does |
+|---|---|---|
+| `00_kaggle_ingest.ipynb` | Kaggle, no GPU | Streams the 19.38 GiB download into per-day blocks |
+| `01_kaggle_lstm.ipynb` | Kaggle, **GPU** | The five-stage LSTM sweep (2.9 min on a T4) |
+| `02_eda.ipynb` | Local | Exploratory figures and statistics |
+| `03_kaggle_final.ipynb` | Kaggle, **GPU** | Final fits for all models, test and stress splits |
+| `04_results.ipynb` | Local | Evaluation, diagnostics and failure analysis |
+
+Executed copies are kept under `notebooks/runs/` as evidence of the runs that produced the
+committed artefacts.
 
 ---
 
@@ -218,55 +370,110 @@ splits are validated as contiguous, non-overlapping and inside the observation p
 Measured on the hardware recorded in `results/environment.json`, one process per
 measurement (see `results/tables/memory_report.csv`):
 
-| strategy | resident/day | peak RSS | wall/day | scales with days |
+| Strategy | Resident/day | Peak RSS | Wall/day | Scales with days |
 |---|---:|---:|---:|---|
-| naive pandas | 295.6 MiB | 633.1 MiB | 5.56 s | yes |
-| chunked pandas | 5.5 MiB | 172.6 MiB | 5.86 s | no |
+| Naive pandas | 295.6 MiB | 633.1 MiB | 5.56 s | **yes** |
+| Chunked pandas | 5.5 MiB | 172.6 MiB | 5.86 s | no |
 | Polars lazy | 5.5 MiB | 552.2 MiB | 0.95 s | no |
 
-The headline is scaling rather than peak: holding all 62 days the naive way needs
-**17.90 GiB** resident, while both optimised paths hold one 5.49 MiB block at a time
-regardless of dataset size, producing a **340.58 MiB** final matrix.
+The headline is **scaling rather than peak**: holding all 62 days the naive way would need
+17.90 GiB resident, while both optimised paths hold one 5.49 MiB block at a time regardless
+of dataset size, producing a 340.58 MiB final matrix. The pipeline is O(1) in dataset size
+where the naive approach is O(*n*).
 
-Polars is ~6x faster but peaks ~3.2x higher, because its CSV reader holds the whole
-~322 MB file; `low_memory=True` and `read_csv_batched` were both measured and made it
-worse. Neither strategy dominates, so `--strategy` selects and both are kept.
+Polars is ~6× faster but peaks ~3.2× higher, because its CSV reader holds the whole ~322 MB
+file; `low_memory=True` (559 MiB) and `read_csv_batched` (697–862 MiB) were both measured
+and made it worse. Neither strategy dominates, so `--strategy` selects and both are kept.
 
-Each measurement runs in its own process. Measuring three strategies in one interpreter
-reported 544, 184 and 384 MiB for identical work, because freed arenas are not returned
-to the OS and whichever ran first paid for the heap growth.
+**Each measurement runs in its own process.** Measuring three strategies in one interpreter
+reported 544, 184 and 384 MiB for *identical* work, because freed arenas are not returned to
+the OS and whichever ran first paid for the heap growth. Available RAM is recorded alongside
+each row, because memory pressure depresses measured peak RSS and would understate demand.
+
+Full run, 62 days: 319,896,289 records parsed, 5.92 min download + 1.54 min ingest, peak RSS
+574 MiB.
+
+---
+
+## Exploratory findings
+
+Six measured constraints drove every modelling decision:
+
+1. **Two seasonal cycles operate simultaneously** — MSTL gives the daily period 82.9% of
+   variance (strength 0.959) and the weekly 10.0% (0.746). SARIMA accommodates one, and at
+   *s* = 144 is intractable anyway → dynamic harmonic regression.
+2. **The daily cycle is not sinusoidal** — a 12.00 h spectral peak sits beside the 24.00 h
+   one → at least two daily Fourier harmonics.
+3. **No stochastic trend** — ADF and KPSS agree across raw, differenced and
+   seasonally-differenced series → *d* = 0. "Stationary" here means no unit root; the mean
+   still varies enormously with time of day.
+4. **Lag-1 autocorrelation is 0.987** → persistence is a demanding baseline, and a flexible
+   model may collapse to reproducing its input. Both a baseline and an explicit check are
+   required.
+5. **ACF peaks at 144, 288, 432, 720, 864, 1008** → the lag set for LightGBM is identified
+   empirically rather than by convention.
+6. **Variance scales with level** — daily mean vs daily SD correlates +0.947 raw, +0.265
+   after `log1p` → the variance-stabilising transform.
+
+Spatial concentration is substantial but not extreme (Gini 0.608; top 1% of cells carry
+11.0%). Traffic character varies at a finer spatial scale than volume rank reveals: the
+three busiest cells all sit within 500 m of the Duomo, yet their weekend ratios span
+0.425–1.384, a factor of 3.3.
+
+Anomaly detection required a per-position robust scale, because seasonal-naive residual
+spread varies 25-fold across the day and a single global scale flagged 12.7% of all
+intervals. Under the corrected scale, 152 intervals (1.73%) are flagged, with holidays
+**1.78× enriched** (*p* = 4.3 × 10⁻⁴). One case resists explanation: Monday 2 December is
+the worst single day and is not a holiday.
+
+---
 
 ## Methodology
 
-One-step-ahead (10 minute) forecasting, univariate, one model per area, at the data's
-native resolution. Inference is always `walk_forward` with true observed history — not a
-recursive rollout — so each forecast uses real observations up to the step before the one
-it predicts.
+One-step-ahead (10-minute) forecasting, univariate, one model per area, at the data's native
+resolution. Inference is always `walk_forward` with **true observed history** — not a
+recursive rollout — so each forecast uses real observations up to the step before the one it
+predicts.
 
 **Three models, each chosen for a stated reason.**
 
-| Model | Why it is here | Params |
+| Model | Why it is here | Parameters |
 |---|---|---:|
-| Dynamic harmonic regression | SARIMAX with Fourier terms. Plain SARIMA cannot express two seasonalities at once and s=144 is intractable. | 22 |
+| Dynamic harmonic regression | SARIMAX with Fourier terms. Plain SARIMA cannot express two seasonalities at once, and *s* = 144 is intractable. | 22 |
 | LSTM | The only candidate that assumes nothing about seasonal form. | 202,369 |
-| LightGBM | Gradient boosting won M5; prior work on this dataset evaluated random forests but not boosting. | 19,639 |
+| LightGBM | Gradient boosting won M5; prior work on this dataset evaluated random forests but not boosting. | 19,639–21,010 |
 
-**Two baselines appear in every table.** With a lag-1 autocorrelation of 0.987,
-persistence is not a straw man — it is the bar that decides whether complexity earned
-its place.
+LightGBM's count is total ensemble leaves — the closest honest analogue to a parameter count
+for a tree model. Unlike the other two it varies by area, because it depends on the data
+fitted rather than the architecture.
 
-**Tuning** ran on the highest-traffic area only, selecting on validation MAE, one axis at
-a time so each decision is attributable. Harmonic order was chosen by AICc (refitting 15
-candidates through walk-forward would have cost far more than an information criterion);
-LightGBM used Optuna over 30 trials because tree parameters interact too strongly for a
-staged sweep; the LSTM used five staged sweeps. Every candidate — 101 in total — appends a
-row to `results/experiments.csv` with the reasoning that produced the next change.
+**Preprocessing.** All models fit on `log1p`-transformed values; the LSTM and LightGBM
+additionally standardise. Statistics are estimated on the **training split only** and the
+scaler raises `LeakageError` if asked to refit. Metrics are reported after
+inverse-transforming to original units.
+
+**Input representation.** Harmonic ARIMA sees 16 Fourier terms as exogenous regressors; the
+LSTM sees a `(144, 7)` window (one value plus six calendar features); LightGBM sees 27
+features (9 causal lags, 3 rolling means and standard deviations, 6 calendar). Every feature
+is computed strictly before the target interval.
+
+**Two baselines appear in every table.** With a lag-1 autocorrelation of 0.987, persistence
+is not a straw man — it is the bar that decides whether complexity earned its place.
+
+**Tuning** ran on the highest-traffic area only, selecting on validation MAE, one axis at a
+time so each decision is attributable. Harmonic order was chosen by AICc; LightGBM used
+Optuna over 30 trials because tree parameters interact too strongly for a staged sweep; the
+LSTM used five staged sweeps, including a calendar ablation worth 14.7%. Every candidate —
+**101 in total** — appends a row to `results/experiments.csv` with the reasoning that
+produced the next change.
 
 **The final fit uses train + validation**, since the validation split has done its job by
-then. Neither early-stopping model has a held-out set left, so each carries the
-*complexity* tuning chose rather than the stopping rule: the LSTM trains for its best
-epoch count with patience disabled, LightGBM uses its selected 320 trees. The LSTM is run
-over three seeds and reported as mean ± standard deviation.
+then. Neither early-stopping model has a held-out set left, so each carries the *complexity*
+tuning chose rather than the stopping rule: the LSTM trains for its best epoch count with
+patience disabled, LightGBM uses its selected 320 trees. The LSTM is run over three seeds and
+reported as mean ± standard deviation.
+
+---
 
 ## Results
 
@@ -282,60 +489,149 @@ magnitude in volume, so raw MAE cannot be compared across them.
 | LSTM (mean of 3 seeds) | 0.265 | 0.259 | 0.257 | 0.260 |
 | seasonal naive | 0.975 | 0.626 | 0.680 | 0.760 |
 
-**The 22-parameter model wins.** Harmonic ARIMA has the best mean MASE and wins two of
-three areas; a three-seed LSTM ensemble takes the third. Averaged across areas, only
-harmonic ARIMA and LightGBM beat persistence — both LSTM variants do not.
+**The 22-parameter model wins.** Harmonic ARIMA has the best mean MASE and wins two of three
+areas; a three-seed LSTM ensemble takes the third. Averaged across areas, **only harmonic
+ARIMA and LightGBM beat persistence** — both LSTM variants do not.
 
-**Complexity did not survive the holidays.** On the held-out stress split (23 Dec – 1 Jan,
-never tuned on) persistence wins outright on two of three areas, while LightGBM degrades
-by 69–140% and the LSTM by 78–103%. Harmonic ARIMA stays within 9%. This confirms a
-prediction written into `src/models/gbm.py` before the split was ever run: a tree ensemble
-cannot extrapolate beyond the range of its training targets, and a holiday period is
-exactly where that bites.
+The two LSTM rows are different quantities and both are reported: `lstm` is the mean of three
+seeds' *errors*, `lstm_ensemble` is the error of their *averaged forecast*. Averaging cannot
+increase absolute error, so the ensemble is better — at three times the training, inference
+and parameter cost.
+
+**Seed variance justifies the three-seed protocol.** On square 4159 the LSTM scores
+21.16 ± 4.59 MAE (22% relative SD); on 4556 its 28.85 ± 1.79 is indistinguishable from
+persistence's 28.86.
 
 **Cost inverts between training and inference** (square 5161, 1,008 forecasts):
 
-| Model | Device | Train | Inference | Per step |
-|---|---|---:|---:|---:|
-| harmonic ARIMA | CPU | 18.0 s | 75.2 s | 74.6 ms |
-| LightGBM | CPU | 5.0 s | 0.022 s | 0.022 ms |
-| LSTM | GPU (T4) | 9.9 s | 0.041 s | 0.041 ms |
+| Model | Device | Train | Inference | Per step | Parameters |
+|---|---|---:|---:|---:|---:|
+| harmonic ARIMA | CPU | 18.0 s | 75.2 s | 74.6 ms | 22 |
+| LightGBM | CPU | 5.0 s | 0.022 s | 0.022 ms | 19,639 |
+| LSTM | GPU (T4) | 9.9 s | 0.041 s | 0.041 ms | 202,369 |
 
 The cheapest model to train is by far the most expensive to serve: `append(refit=False)`
-still runs a Kalman update per step, making harmonic ARIMA ~1,800× slower at inference
-than the LSTM. Training times are not comparable across devices, which is why every
-results and timing table carries a `device` column. On a CPU a single LSTM fit at the
-tuned size took 13.8 hours against 2.6 seconds on a T4 — a 776× difference measured on
-identical configuration.
+still runs a Kalman update per step, making harmonic ARIMA **~1,825× slower** per forecast
+than the LSTM. At city scale that disqualifies it — one forecast for each of the 10,000 cells
+would take 12.4 minutes, longer than the ten-minute interval being forecast.
+
+Training times are not comparable across devices. For one configuration fitted on both
+machines the same fit took **2,019 s on the CPU against 2.6 s on the T4** (777×). The largest
+configuration reached during the CPU sweep took 13.8 hours for a single fit; its GPU
+counterpart was never run, so that is a CPU cost rather than half of a ratio.
+
+---
+
+## Failure analysis
 
 **No model collapsed to persistence.** With lag-1 autocorrelation at 0.987 this was a real
-risk, so it was tested two ways and reported either way; copy ratios run 0.54–1.14 against
+risk, so it was tested and reported either way; copy ratios run 0.54–1.14 against
 persistence's 0.00. See `results/tables/copying_test.csv`.
+
+A methodological note: cross-correlating forecasts against observations, every model peaks at
+lag +1. That is *not* evidence of copying — a one-step forecast is built only from data up to
+*t*−1 and cannot contain the innovation at *t*, so it must correlate slightly more with the
+previous value. Seasonal naive is the only model peaking at lag 0 and is the worst forecaster
+in the study. The verdict therefore rests on the copy ratio, not the peak.
+
+**Complexity did not survive the holidays.** On the held-out stress split (23 Dec – 1 Jan,
+never tuned on) persistence wins outright on two of three areas, while LightGBM degrades by
+69–140% and the LSTM by 78–103%. Harmonic ARIMA stays within 9%. This confirms a prediction
+written into `src/models/gbm.py` *before* the split was run: a tree ensemble cannot
+extrapolate beyond the range of its training targets.
+
+**Two specific failure modes, not general ones.** The LSTM's poor result on square 4159 is a
+weekday-morning failure — its three worst six-hour windows all begin ~09:50 on consecutive
+weekdays at 2.0–2.6× persistence, and its weekday/weekend MAE split of 24.13/12.03 is the
+most lopsided of any model. Harmonic ARIMA's win on 5161 is weekday-specific in the opposite
+direction: best of any model on weekdays (74.96) but worse than persistence at weekends
+(105.33 vs 103.90).
+
+---
+
+## Testing and engineering practices
+
+**506 tests across 26 modules.** They target the properties the conclusions depend on rather
+than line coverage:
+
+- **Leakage** — the scaler refuses to refit; the final fit's inputs stop before the test split.
+- **Inference correctness** — the batched `walk_forward` used by LightGBM and the LSTM is
+  asserted equal to the step-by-step loop.
+- **Metric correctness** — MASE is scaled by training-set error, not by the window scored.
+- **Diagnostics** — checked against forecasts whose answer is known by construction: a
+  perfect forecast, an exact persistence copy, an error confined to one hour.
+- **Artefact integrity** — the committed selections carry their stopping points; timing
+  tables with `cuda` rows have a CUDA machine on record; committed summaries hold no absolute
+  paths; the report's figures resolve and its numbers match the tables.
+
+Other practices: all logic in `src/` with notebooks rendering only; strict YAML config with
+no hardcoded paths or hyperparameters; an append-only experiment log where every row carries
+a non-empty rationale; seeded determinism with library versions recorded; `ruff` clean.
+
+Several bugs were caught by tests rather than by inspection — among them a selections file
+that silently dropped its early-stopping counts (the final LightGBM fit would have trained
+2,000 trees instead of 320), a per-area metrics table reduced to a single row by an
+int/string key collision, and a weekday/weekend split that was reading the holiday column.
 
 ---
 
 ## The report
 
-`report/REPORT.md` is the consolidated write-up: 23 figures, 15 tables, 15 references, and
-every number traceable to an artefact under `report/tables/`. `tests/test_report.py` checks
-that each referenced figure exists, that figure and table numbering is contiguous, that every
-citation has an entry and every entry is cited, and that the MASE values in the prose match
-the metrics tables.
+**[`report/REPORT.md`](report/REPORT.md)** is the consolidated write-up: abstract, 23
+figures, 16 tables, 15 references and three appendices, with every number traceable to an
+artefact under `report/tables/`.
 
-Supporting material: `report/RESULTS_SUMMARY.md` (uninterpreted dump of every measured
-number), `report/FACTS.json` (133 named facts), `report/FIGURE_INDEX.md`, and
-`report/references.md` with per-reference verification notes.
+`tests/test_report.py` checks that each referenced figure exists, that figure and table
+numbering is contiguous, that every citation has an entry and every entry is cited, that the
+MASE values in the prose match the metrics tables, and that the AI-use declaration is left
+for the author.
+
+Supporting material:
+
+| File | Contents |
+|---|---|
+| `report/RESULTS_SUMMARY.md` | Uninterpreted dump of every measured number, by section |
+| `report/FACTS.json` / `.md` | 133 named facts, each with unit, source artefact and description |
+| `report/FIGURE_INDEX.md` | Figure → report-section map |
+| `report/references.md` | References with per-entry verification notes |
+| `report/RELATED_WORK.md` | Literature review behind the model line-up |
+| `report/DRAFT_SECTIONS.md` | Section drafts, superseded by `REPORT.md`, kept for history |
+
+Regenerate the whole pack with `python run.py report`.
 
 ---
 
 ## Licence and data terms
 
-Code in this repository is released under the MIT Licence. The underlying dataset is
-distributed by Harvard Dataverse under its own terms (ODbL); it is not redistributed
-here, and `data/raw/` is excluded from version control.
+Code in this repository is released under the **MIT Licence** (see `LICENSE`). The
+underlying dataset is distributed by Harvard Dataverse under its own terms (ODbL); it is
+**not redistributed here**, and `data/raw/` is excluded from version control. Anyone
+reproducing the ingest must accept the Dataverse Guestbook themselves.
+
+---
 
 ## References
 
-1. G. Barlacchi *et al.*, "A multi-source dataset of urban life in the city of Milan and
-   the Province of Trentino," *Scientific Data*, vol. 2, 150055, 2015.
+Full IEEE-style reference list with verification notes: `report/references.md`.
+
+1. G. Barlacchi *et al.*, "A multi-source dataset of urban life in the city of Milan and the
+   Province of Trentino," *Scientific Data*, vol. 2, art. 150055, 2015.
    doi:10.1038/sdata.2015.55
+2. A. Azari, P. Papapetrou, S. Denic, and G. Peters, "Cellular traffic prediction and
+   classification: A comparative evaluation of LSTM and ARIMA," in *Discovery Science*,
+   Springer, 2019, pp. 129–144. doi:10.1007/978-3-030-33778-0_11
+3. C. Zhang and P. Patras, "Long-term mobile traffic forecasting using deep spatio-temporal
+   neural networks," in *Proc. MobiHoc '18*, 2018, pp. 231–240. doi:10.1145/3209582.3209606
+4. G. L. Santos *et al.*, "Predicting short-term mobile Internet traffic from Internet
+   activity using recurrent neural networks," *Int. J. Network Management*, vol. 32, no. 3,
+   art. e2191, 2022. doi:10.1002/nem.2191
+5. R. J. Hyndman and G. Athanasopoulos, *Forecasting: Principles and Practice*, 3rd ed.
+   OTexts, 2021.
+6. R. J. Hyndman and A. B. Koehler, "Another look at measures of forecast accuracy,"
+   *Int. J. Forecasting*, vol. 22, no. 4, pp. 679–688, 2006.
+   doi:10.1016/j.ijforecast.2006.03.001
+
+---
+
+**Source code:** `https://github.com/Hassan-Adelani-Luqman/milan-traffic-forecasting`
+**Demonstration video:** `<video URL>`

@@ -80,7 +80,7 @@ pp. 8024–8035.
 
 _To be completed before submission:_
 
-- **Source code repository:** `<GitHub URL>`
+- **Source code repository:** `https://github.com/Hassan-Adelani-Luqman/milan-traffic-forecasting`
 - **Demo video:** `<video URL>`
 
 ---

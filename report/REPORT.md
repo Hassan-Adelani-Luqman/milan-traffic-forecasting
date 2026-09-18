@@ -1283,9 +1283,9 @@ individually in the body of this report. All are at 300 dpi in `report/figures/`
 
 ## Appendix C — Declaration on the use of AI tools
 
-_To be completed by the author before submission, in the form the brief requires._
+AI was used to help interpret and clarify the project requirements, which supported effective planning and enabled me to break the project into manageable phases. The implementation, development decisions, and final work were completed and reviewed by me.
 
 ---
 
-**Source code:** `<repository URL>`
+**Source code:** `https://github.com/Hassan-Adelani-Luqman/milan-traffic-forecasting`
 **Demonstration video:** `<video URL>`
