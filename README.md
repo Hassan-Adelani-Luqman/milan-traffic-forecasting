@@ -141,7 +141,7 @@ cd milan-traffic-forecasting
 py -V:3.12 -m venv .venv                       # Windows
 .venv\Scripts\pip install -r requirements-local.txt
 
-.venv\Scripts\python run.py test               # 506 tests
+.venv\Scripts\python run.py test               # 501 tests
 .venv\Scripts\python run.py env                # record hardware
 ```
 
@@ -236,7 +236,7 @@ git clone https://github.com/Hassan-Adelani-Luqman/milan-traffic-forecasting.git
 python -m venv .venv && .venv/Scripts/activate      # source .venv/bin/activate on Linux
 pip install -r requirements.txt
 
-python run.py test                     # 506 tests, ~8 min
+python run.py test                     # 501 tests, ~90 s
 python run.py evaluate --split test    # baseline metrics from the committed series
 python run.py results  --split test    # 28 figures + 5 tables from the committed forecasts
 python run.py results  --split stress  # the same for the holiday split
@@ -326,7 +326,7 @@ observations in the training set.
 ├── notebooks/                 thin: import from src/, render figures only
 │   ├── build_*_notebook.py    generators — the notebooks are output, not source
 │   └── runs/                  executed notebooks, kept as evidence
-├── tests/                     26 modules, 506 tests
+├── tests/                     27 modules, 501 tests
 ├── results/
 │   ├── experiments.csv        append-only log of all 101 tuning runs
 │   ├── environment*.json      hardware and library versions per machine
@@ -552,7 +552,7 @@ direction: best of any model on weekdays (74.96) but worse than persistence at w
 
 ## Testing and engineering practices
 
-**506 tests across 26 modules.** They target the properties the conclusions depend on rather
+**501 tests across 27 modules.** They target the properties the conclusions depend on rather
 than line coverage:
 
 - **Leakage** — the scaler refuses to refit; the final fit's inputs stop before the test split.

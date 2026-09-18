@@ -342,7 +342,7 @@ no zero value at any point in any split, with minima of 47.3, 55.8 and 80.2.
 All configuration — paths, dates, split boundaries, preprocessing parameters, resides in a
 single YAML file, loaded into immutable structures with strict validation that rejects
 unknown keys and verifies that the four splits are contiguous, non-overlapping and within
-the observation period. Logic resides in a tested library of 488 tests; notebooks import
+the observation period. Logic resides in a tested library of 501 tests; notebooks import
 from it and render figures. The processed artefacts other than the full matrix total
 approximately 600 KB and are version-controlled, so the exploratory analysis, the modelling
 stages and every figure in this report reproduce from a clean checkout without repeating
@@ -1247,7 +1247,7 @@ git clone <repository URL> && cd milan-traffic-forecasting
 python -m venv .venv && .venv/Scripts/activate      # source .venv/bin/activate on Linux
 pip install -r requirements.txt
 
-python run.py test                     # 488 tests
+python run.py test                     # 501 tests
 python run.py evaluate --split test    # baseline metrics from the committed series
 python run.py results --split test     # figures and diagnostic tables
 python run.py results --split stress
