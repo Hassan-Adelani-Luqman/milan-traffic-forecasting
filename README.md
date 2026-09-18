@@ -8,8 +8,10 @@ Challenge call-detail-record dataset (1 November 2013 – 1 January 2014).
 mobile network traffic forecasting, and how does their performance vary across
 geographical areas with different traffic characteristics?
 
-> **Status: data stage complete** (download, ingest, matrix assembly, memory evidence).
-> Sections marked _pending_ are filled in as later phases land.
+> **Status: complete.** All stages have run: ingest, exploratory analysis, model tuning,
+> final fits, evaluation and failure analysis. The write-up is `report/REPORT.md`.
+> A clean clone reproduces every reported metric exactly — see *Reproducing results*
+> below.
 
 ---
 
@@ -47,9 +49,12 @@ This project is **hybrid** by design:
 
 - **Locally** (Windows, Python 3.12): `src/`, `config/` and `tests/` are developed and
   version-controlled. Tests run in seconds without a GPU.
-- **On Kaggle** (Linux, P100/T4): ingest, exploratory analysis and all model training.
-  Notebooks `git clone` this repo and import from `src/` — they contain no model or
-  preprocessing logic of their own.
+- **On Kaggle** (Linux, T4): ingest, and the stages that need a GPU — the LSTM sweep and
+  the final fits. Notebooks `git clone` this repo and import from `src/`; they contain no
+  model or preprocessing logic of their own. Harmonic ARIMA and LightGBM tuning run
+  locally in minutes. The split is measured, not assumed: a 288-step recurrence is
+  latency-bound on a sequential dependency that CPU threads cannot divide, so one LSTM
+  fit took 2,019 s locally against 2.6 s on a T4.
 
 Kaggle's disk budget shapes the ingest: `/kaggle/working` is ~20 GB and persisted,
 while everything else is ~60 GB of scratch that is discarded at session end. The 20 GB
@@ -151,7 +156,7 @@ git clone <this repo> && cd milan-traffic-forecasting
 python -m venv .venv && .venv/Scripts/activate      # source .venv/bin/activate on Linux
 pip install -r requirements.txt
 
-python run.py test                     # 458 tests, ~7 min
+python run.py test                     # 506 tests, ~8 min
 python run.py evaluate --split test    # baseline metrics from the committed series
 python run.py results --split test     # 28 figures + 6 tables from the committed forecasts
 python run.py results --split stress   # the same for the holiday split
@@ -306,6 +311,20 @@ identical configuration.
 **No model collapsed to persistence.** With lag-1 autocorrelation at 0.987 this was a real
 risk, so it was tested two ways and reported either way; copy ratios run 0.54–1.14 against
 persistence's 0.00. See `results/tables/copying_test.csv`.
+
+---
+
+## The report
+
+`report/REPORT.md` is the consolidated write-up: 23 figures, 15 tables, 15 references, and
+every number traceable to an artefact under `report/tables/`. `tests/test_report.py` checks
+that each referenced figure exists, that figure and table numbering is contiguous, that every
+citation has an entry and every entry is cited, and that the MASE values in the prose match
+the metrics tables.
+
+Supporting material: `report/RESULTS_SUMMARY.md` (uninterpreted dump of every measured
+number), `report/FACTS.json` (133 named facts), `report/FIGURE_INDEX.md`, and
+`report/references.md` with per-reference verification notes.
 
 ---
 

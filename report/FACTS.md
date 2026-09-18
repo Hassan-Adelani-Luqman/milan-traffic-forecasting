@@ -161,6 +161,7 @@ Regenerate with `python -m src.facts`.
 
 | key | value | unit | source | description |
 |---|---|---|---|---|
+| `experiments_logged` | 101 | runs | `experiments.csv` | Candidates logged across all three models, each with a rationale |
 | `harmonic_fourier_orders` | K1=6, K2=2 |  | `selected_hyperparameters.json` | Daily and weekly Fourier orders selected by AICc |
 | `harmonic_order` | (3, 0, 1) |  | `selected_hyperparameters.json` | ARIMA(p,d,q) chosen on validation MAE with harmonics fixed |
 | `lightgbm_trees` | 320 | trees | `selected_hyperparameters.json` | Trees early stopping chose, against the n_estimators ceiling |

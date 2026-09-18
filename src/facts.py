@@ -729,7 +729,8 @@ def _model_facts(facts: FactSet, tables: Path) -> None:
                 ),
             )
 
-    experiments = tables / "experiments.csv"
+    # The experiment log lives beside the tables directory, not inside it.
+    experiments = tables.parent / "experiments.csv"
     if experiments.exists():
         rows = _csv(experiments)
         facts.add(

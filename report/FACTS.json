@@ -167,6 +167,13 @@
     "source": "ingest_summary.json",
     "description": "Total download time"
   },
+  "experiments_logged": {
+    "value": 101,
+    "display": "101",
+    "unit": "runs",
+    "source": "experiments.csv",
+    "description": "Candidates logged across all three models, each with a rationale"
+  },
   "forecast_squares": {
     "value": "5161, 4159, 4556",
     "display": "5161, 4159, 4556",

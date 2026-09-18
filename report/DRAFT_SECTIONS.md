@@ -1,8 +1,13 @@
 # Draft report sections
 
-> **Status: first draft, to be rewritten in the author's own voice.**
-> Every number here traces to `report/RESULTS_SUMMARY.md` and the artefacts under
-> `report/tables/`. All sections are drafted; none are blocked.
+> **Superseded by `report/REPORT.md`.**
+> These are the section-by-section working drafts. They were consolidated, re-ordered
+> and rewritten into a single submission-ready document, which is the one to read and
+> to submit. This file is kept because it records the drafting history and a few
+> passages that did not survive the consolidation.
+>
+> Every number in both files traces to `report/RESULTS_SUMMARY.md` and the artefacts
+> under `report/tables/`.
 
 ---
 
