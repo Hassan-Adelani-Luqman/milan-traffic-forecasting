@@ -204,6 +204,7 @@ python run.py results    # evaluation figures, diagnostics, failure analysis
 python run.py evaluate   # baseline metrics for any split
 python run.py facts      # regenerate the named fact registry
 python run.py report     # export figures and tables into report/
+python run.py pdf        # render report/REPORT.md as report/REPORT.pdf
 python run.py test       # pytest
 python run.py lint       # ruff
 python run.py all        # everything above, in order
@@ -579,7 +580,18 @@ int/string key collision, and a weekday/weekend split that was reading the holid
 
 **[`report/REPORT.md`](report/REPORT.md)** is the consolidated write-up: abstract, 23
 figures, 16 tables, 15 references and three appendices, with every number traceable to an
-artefact under `report/tables/`.
+artefact under `report/tables/`. **[`report/REPORT.pdf`](report/REPORT.pdf)** is the
+print-ready rendering — 33 pages, A4, Times New Roman, figures at 300 dpi — produced by
+`python run.py pdf`.
+
+The renderer (`src/export_pdf.py`) is bespoke: pandoc, wkhtmltopdf and LaTeX are all absent
+on the development machine and WeasyPrint needs GTK libraries Windows does not supply, so
+the conversion is done directly with ReportLab. Two details there are load-bearing. Fonts
+are registered from TrueType files because ReportLab's built-ins are WinAnsi-encoded and
+would render U+2212, the arrow, ≥ and the Greek letters as **black boxes**, silently;
+`tests/test_export_pdf.py` checks the font's actual glyph table against the report's
+character set. And Unicode sub/superscripts are translated to `<sub>`/`<super>` markup
+rather than passed through, because Arial omits three of the ones used here entirely.
 
 `tests/test_report.py` checks that each referenced figure exists, that figure and table
 numbering is contiguous, that every citation has an entry and every entry is cited, that the
@@ -597,7 +609,8 @@ Supporting material:
 | `report/RELATED_WORK.md` | Literature review behind the model line-up |
 | `report/DRAFT_SECTIONS.md` | Section drafts, superseded by `REPORT.md`, kept for history |
 
-Regenerate the whole pack with `python run.py report`.
+Regenerate the whole pack with `python run.py report`, and the PDF with
+`python run.py pdf` (`--dpi` controls figure resolution; 300 is print quality).
 
 ---
 

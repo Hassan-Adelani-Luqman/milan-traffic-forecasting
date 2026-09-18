@@ -38,6 +38,7 @@ PIPELINE = (
     "results",
     "evaluate",
     "report",
+    "pdf",
 )
 
 
@@ -68,6 +69,7 @@ TASKS: tuple[Task, ...] = (
     Task("results", "src.run_results", "Phase 6 figures, diagnostics and failure analysis"),
     Task("evaluate", "src.evaluate", "Evaluate on the test week; write metrics and diagnostics"),
     Task("facts", "src.facts", "Regenerate the named fact registry from the artefacts"),
+    Task("pdf", "src.export_pdf", "Render report/REPORT.md as a print-ready PDF"),
     Task("report", "src.export_report", "Export figures and tables into report/"),
     Task("test", "pytest", "Run the test suite", takes_config=False),
     Task("lint", "ruff", "Lint src/ and tests/", takes_config=False),

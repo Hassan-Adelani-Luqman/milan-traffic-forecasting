@@ -28,3 +28,7 @@ psutil==6.1.0
 requests==2.32.3
 tqdm==4.67.1
 PyYAML==6.0.2
+
+# Report rendering (src/export_pdf.py) and its verification.
+reportlab>=4.0
+pypdf>=4.0
